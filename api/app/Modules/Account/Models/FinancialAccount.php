@@ -12,6 +12,7 @@ use App\Modules\CreditCard\Models\CreditCard;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\Reconciliation\Models\Reconciliation;
 use App\Modules\Recurrence\Models\Recurrence;
+use App\Modules\Shared\Casts\DateOnlyCast;
 use App\Modules\Shared\Models\Concerns\HasUuid;
 use App\Modules\Tenant\Models\Concerns\BelongsToTenant;
 use App\Modules\Transfer\Models\Transfer;
@@ -43,6 +44,7 @@ class FinancialAccount extends Model
         'subcategory_id',
         'value',
         'due_date',
+        'purchase_date',
         'expected_date',
         'paid_date',
         'observation',
@@ -61,9 +63,10 @@ class FinancialAccount extends Model
             'type' => AccountType::class,
             'status' => AccountStatus::class,
             'value' => 'decimal:2',
-            'due_date' => 'date',
-            'expected_date' => 'date',
-            'paid_date' => 'date',
+            'due_date' => DateOnlyCast::class,
+            'purchase_date' => DateOnlyCast::class,
+            'expected_date' => DateOnlyCast::class,
+            'paid_date' => DateOnlyCast::class,
             'reconciled_at' => 'datetime',
             'is_card_purchase' => 'boolean',
             'is_card_invoice_payable' => 'boolean',

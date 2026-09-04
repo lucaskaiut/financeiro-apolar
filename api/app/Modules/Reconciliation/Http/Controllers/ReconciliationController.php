@@ -38,10 +38,13 @@ class ReconciliationController extends ApiController
 
     public function candidates(BankTransaction $transaction, Request $request): JsonResponse
     {
+        $exact = $request->has('exact') ? $request->boolean('exact') : true;
+
         $candidates = $this->service->candidates(
             $transaction,
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
+            exactValue: $exact,
         );
 
         return $this->success([
@@ -92,7 +95,11 @@ class ReconciliationController extends ApiController
     {
         $account = FinancialAccount::query()->where('uuid', $request->string('account_id'))->firstOrFail();
 
-        $this->service->reconcile($transaction, $account, $request->user());
+        try {
+            $this->service->reconcile($transaction, $account, $request->user());
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['account_id' => [$e->getMessage()]]);
+        }
 
         $this->audit->recordEntity(
             $request->user(),
@@ -107,18 +114,25 @@ class ReconciliationController extends ApiController
 
     public function reconcileMany(ReconcileManyRequest $request): JsonResponse
     {
-        $this->service->reconcileMany(
-            $request->input('transactions'),
-            $request->input('accounts'),
-            $request->user(),
-        );
+        try {
+            $this->service->reconcileMany(
+                $request->input('transactions'),
+                $request->input('accounts'),
+                $request->user(),
+            );
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['accounts' => [$e->getMessage()]]);
+        }
 
         $this->audit->recordEntity(
             $request->user(),
             AuditAction::ReconciliationExecute,
             'reconciliation',
             'many',
-            ['transactions' => $request->input('transactions')],
+            [
+                'transactions' => $request->input('transactions'),
+                'accounts' => $request->input('accounts'),
+            ],
         );
 
         return $this->success(null, 'Conciliação múltipla realizada com sucesso.');
@@ -133,17 +147,24 @@ class ReconciliationController extends ApiController
 
     public function createAccount(CreateFromTransactionRequest $request, BankTransaction $transaction): JsonResponse
     {
-        $account = $this->service->createFromTransaction($transaction, $request->validated(), $request->user());
+        try {
+            $account = $this->service->createFromTransaction($transaction, $request->validated(), $request->user());
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['value' => [$e->getMessage()]]);
+        }
 
         $this->audit->recordEntity(
             $request->user(),
             AuditAction::ReconciliationExecute,
             'bank_transaction',
             $transaction->uuid,
-            ['account' => $account->uuid],
+            [
+                'account' => $account->uuid,
+                'account_ids' => $request->input('account_ids', []),
+            ],
         );
 
-        return $this->created(AccountResource::make($account->load(['costCenter:id,uuid,name', 'category:id,uuid,name'])), 'Lançamento criado a partir do extrato.');
+        return $this->created(AccountResource::make($account->load(['costCenter:id,uuid,name', 'category:id,uuid,name', 'bankAccount:id,uuid,name'])), 'Lançamento criado a partir do extrato.');
     }
 
     public function undo(Request $request, BankTransaction $transaction): JsonResponse

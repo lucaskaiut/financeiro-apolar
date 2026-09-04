@@ -31,6 +31,7 @@ class DashboardService
         $openAccounts = FinancialAccount::query()
             ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type'])
             ->whereIn('status', ['open', 'partial'])
+            ->where('is_card_purchase', false)
             ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->withSum('settlements', 'value')
             ->get();
@@ -112,7 +113,7 @@ class DashboardService
             ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
             ->sum('initial_balance');
 
-        $base = fn () => Settlement::query()
+        $base = fn () => $this->bankAffectingSettlements()
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)));
 
         $in = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Receivable->value))->sum('value');
@@ -124,8 +125,9 @@ class DashboardService
     private function settledBetween(Carbon $from, Carbon $to, AccountType $type, ?string $bankAccountId): float
     {
         return round(
-            (float) Settlement::query()
-                ->whereBetween('settled_at', [$from, $to])
+            (float) $this->bankAffectingSettlements()
+                ->whereDate('settled_at', '>=', $from->toDateString())
+                ->whereDate('settled_at', '<=', $to->toDateString())
                 ->whereHas('account', fn ($q) => $q->where('type', $type->value))
                 ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
                 ->sum('value'),
@@ -140,7 +142,7 @@ class DashboardService
     {
         $windowStart = now()->startOfMonth()->subMonths(11);
 
-        $settlements = Settlement::query()
+        $settlements = $this->bankAffectingSettlements()
             ->with('account:id,type,bank_account_id')
             ->whereDate('settled_at', '>=', $windowStart->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
@@ -182,7 +184,7 @@ class DashboardService
 
     private function netSettledBefore(Carbon $upTo, ?string $bankAccountId): float
     {
-        $base = fn () => Settlement::query()
+        $base = fn () => $this->bankAffectingSettlements()
             ->whereDate('settled_at', '<', $upTo->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)));
 
@@ -193,14 +195,43 @@ class DashboardService
     }
 
     /**
+     * Baixas que afetam saldo bancário (exclui liquidação interna das compras da fatura).
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Modules\Account\Models\Settlement>
+     */
+    private function bankAffectingSettlements()
+    {
+        return Settlement::query()
+            ->where(function ($query): void {
+                $query->whereNull('method')
+                    ->orWhere('method', '!=', 'credit_card_invoice');
+            })
+            ->whereHas('account', fn ($a) => $a->where(function ($query): void {
+                $query->where('is_card_purchase', false)
+                    ->orWhere('is_card_invoice_payable', true);
+            }));
+    }
+
+    /**
      * @return list<array{category: string, total: float}>
      */
     private function byCategory(Carbon $from, Carbon $to, CategoryType $type, ?string $bankAccountId): array
     {
+        // Despesas de cartão entram pela compra (categoria), não pela fatura.
         $settlements = Settlement::query()
             ->with('account.category:id,uuid,name,type')
-            ->whereBetween('settled_at', [$from, $to])
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
+            ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
+            ->whereHas('account', fn ($a) => $a->where('is_card_invoice_payable', false))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', function ($a) use ($bankAccountId): void {
+                $a->where(function ($inner) use ($bankAccountId): void {
+                    $inner->where('bank_account_id', $bankAccountId)
+                        ->orWhere(function ($card) use ($bankAccountId): void {
+                            $card->where('is_card_purchase', true)
+                                ->whereHas('creditCard', fn ($c) => $c->where('bank_account_id', $bankAccountId));
+                        });
+                });
+            }))
             ->get()
             ->filter(fn (Settlement $s) => $s->account?->category !== null && $s->account->category->type === $type);
 

@@ -134,7 +134,7 @@ export default function CostCentersListPage() {
             <EmptyState
               icon={Landmark}
               title="Nenhum centro de custo cadastrado"
-              description="Cadastre centros de custo para classificar lançamentos e rateios."
+              description="Cadastre centros de custo para classificar lançamentos."
             />
           }
         />

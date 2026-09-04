@@ -34,10 +34,15 @@ export const reconciliationService = {
     return response.data.data
   },
 
-  async candidates(id: string, from?: string, to?: string): Promise<{ transaction: BankTransaction; candidates: Account[] }> {
+  async candidates(
+    id: string,
+    from?: string,
+    to?: string,
+    exact = true,
+  ): Promise<{ transaction: BankTransaction; candidates: Account[] }> {
     const response = await http.get<ApiResponse<{ transaction: BankTransaction; candidates: Account[] }>>(
       `/reconciliation/transactions/${id}/candidates`,
-      { params: { from, to } },
+      { params: { from, to, exact: exact ? 1 : 0 } },
     )
 
     return response.data.data
@@ -49,6 +54,10 @@ export const reconciliationService = {
     })
 
     return response.data.data
+  },
+
+  async reconcileMany(transactions: string[], accounts: string[]): Promise<void> {
+    await http.post('/reconciliation/reconcile-many', { transactions, accounts })
   },
 
   async ignore(id: string): Promise<BankTransaction> {
@@ -70,8 +79,10 @@ export const reconciliationService = {
       description: string
       category_id: string
       bank_account_id?: string
+      cost_center_id?: string | null
       value?: number
       due_date?: string
+      account_ids?: string[]
     },
   ): Promise<Account> {
     const response = await http.post<ApiResponse<Account>>(`/reconciliation/transactions/${id}/create-account`, payload)

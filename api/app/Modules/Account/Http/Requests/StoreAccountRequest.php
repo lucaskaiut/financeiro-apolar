@@ -4,6 +4,7 @@ namespace App\Modules\Account\Http\Requests;
 
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Category\Models\Category;
+use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,6 +22,7 @@ class StoreAccountRequest extends FormRequest
     public function rules(): array
     {
         $tenantId = TenantContext::tenantId();
+        $hasCreditCard = filled($this->input('credit_card_id'));
 
         return [
             'type' => ['required', 'string', Rule::in(AccountType::values())],
@@ -29,7 +31,7 @@ class StoreAccountRequest extends FormRequest
             'bank_account_id' => [
                 'nullable',
                 'string',
-                'required_without:credit_card_id',
+                Rule::requiredIf(! $hasCreditCard),
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'credit_card_id' => [
@@ -48,8 +50,7 @@ class StoreAccountRequest extends FormRequest
                 Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'category_id' => [
-                'required_without:allocations',
-                'nullable',
+                'required',
                 'string',
                 Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
@@ -61,35 +62,13 @@ class StoreAccountRequest extends FormRequest
                     ->whereNotNull('parent_id')),
             ],
             'value' => ['required', 'numeric', 'gt:0'],
-            'due_date' => ['required', 'date'],
+            'due_date' => [$hasCreditCard ? 'nullable' : 'required', 'date'],
+            'purchase_date' => [$hasCreditCard ? 'required' : 'nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'observation' => ['nullable', 'string'],
             'installments' => ['nullable', 'array:quantity,interval'],
             'installments.quantity' => ['required_with:installments', 'integer', 'min:1', 'max:120'],
             'installments.interval' => ['nullable', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
-            'allocations' => ['nullable', 'array', 'min:1'],
-            'allocations.*.cost_center_id' => [
-                'nullable',
-                'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
-            ],
-            'allocations.*.company_id' => [
-                'nullable',
-                'string',
-                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
-            ],
-            'allocations.*.category_id' => [
-                'nullable',
-                'string',
-                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
-            ],
-            'allocations.*.subcategory_id' => [
-                'nullable',
-                'string',
-                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
-            ],
-            'allocations.*.value' => ['nullable', 'numeric', 'gt:0'],
-            'allocations.*.percentage' => ['nullable', 'numeric', 'gt:0', 'lte:100'],
         ];
     }
 
@@ -99,7 +78,55 @@ class StoreAccountRequest extends FormRequest
             $this->merge(['value' => (float) $this->input('value')]);
         }
 
+        if ($this->input('credit_card_id') === '') {
+            $this->merge(['credit_card_id' => null]);
+        }
+
+        if ($this->input('bank_account_id') === '') {
+            $this->merge(['bank_account_id' => null]);
+        }
+
+        if (filled($this->input('credit_card_id'))) {
+            $this->merge([
+                'type' => AccountType::Payable->value,
+                'bank_account_id' => null,
+            ]);
+        }
+
+        $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date']);
+
         $this->fillCategoryFromSubcategory();
+    }
+
+    /**
+     * @param  list<string>  $fields
+     */
+    private function mergeDateOnlyFields(array $fields): void
+    {
+        $merged = [];
+
+        foreach ($fields as $field) {
+            if (! $this->exists($field)) {
+                continue;
+            }
+
+            $value = $this->input($field);
+
+            if ($value === null || $value === '') {
+                $merged[$field] = null;
+                continue;
+            }
+
+            try {
+                $merged[$field] = DateOnly::normalize($value);
+            } catch (\InvalidArgumentException) {
+                // Mantém o valor original para a validação `date` falhar com mensagem clara.
+            }
+        }
+
+        if ($merged !== []) {
+            $this->merge($merged);
+        }
     }
 
     private function fillCategoryFromSubcategory(): void

@@ -111,6 +111,23 @@ body {
   border-radius: 6px;
 }
 
+/* O anel de foco do DatePicker fica no container; filhos não devem desenhar o próprio. */
+.datepicker-control:focus-within,
+.datepicker-control[data-open='true'] {
+  outline: 2px solid var(--app-ring);
+  outline-offset: 2px;
+}
+
+.datepicker-control.datepicker-invalid:focus-within,
+.datepicker-control.datepicker-invalid[data-open='true'] {
+  outline-color: color-mix(in srgb, var(--app-danger) 60%, transparent);
+}
+
+.datepicker-control *:focus,
+.datepicker-control *:focus-visible {
+  outline: none !important;
+}
+
 ::selection {
   background: var(--app-primary);
   color: var(--app-primary-fg);

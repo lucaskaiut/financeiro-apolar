@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -21,21 +21,31 @@ import { applyApiErrorsToForm } from '@/shared/utils/forms'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useCompanyOptions } from '@/modules/companies/hooks/useCompanies'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { categoriesService } from '@/modules/categories/services/categories.service'
 import { accountSchema, type AccountFormValues } from '../schemas/account.schema'
 import type { AccountPayload } from '../services/accounts.service'
 import { PendingDocuments } from '../components/PendingDocuments'
-import { AllocationSection } from '../components/AllocationSection'
 
 interface AccountFormProps {
   mode: 'create' | 'edit'
   defaultValues?: Partial<AccountFormValues>
   submitting: boolean
   hasSettlement?: boolean
+  isCardPurchase?: boolean
+  purchaseDate?: string | null
   onSubmit: (payload: AccountPayload, documents: File[]) => Promise<unknown>
 }
 
-export function AccountForm({ mode, defaultValues, submitting, hasSettlement = false, onSubmit }: AccountFormProps) {
+export function AccountForm({
+  mode,
+  defaultValues,
+  submitting,
+  hasSettlement = false,
+  isCardPurchase = false,
+  purchaseDate = null,
+  onSubmit,
+}: AccountFormProps) {
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
     defaultValues: {
@@ -43,21 +53,22 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
       description: '',
       counterparty: '',
       bank_account_id: '',
+      credit_card_id: '',
       company_id: '',
       cost_center_id: '',
       category_id: '',
       subcategory_id: '',
       value: '',
       due_date: '',
+      purchase_date: '',
       expected_date: '',
       paid_date: '',
       observation: '',
-      use_allocations: false,
-      allocations: [],
       installments: false,
       installment_quantity: '2',
       installment_interval: 'monthly',
       ...defaultValues,
+      ...(isCardPurchase && purchaseDate ? { purchase_date: purchaseDate } : {}),
     },
   })
 
@@ -66,12 +77,21 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
 
   const type = form.watch('type')
   const installments = form.watch('installments')
-  const useAllocations = form.watch('use_allocations')
+  const creditCardId = form.watch('credit_card_id')
+  const usingCreditCard = mode === 'create' ? Boolean(creditCardId) : isCardPurchase
   const categoryType = type === 'receivable' ? 'income' : 'expense'
 
   const bankAccounts = useBankAccountOptions()
+  const creditCards = useCreditCardOptions()
   const companies = useCompanyOptions()
   const costCenters = useCostCenterOptions()
+
+  useEffect(() => {
+    if (mode !== 'create' || !creditCardId) return
+
+    form.setValue('type', 'payable')
+    form.setValue('bank_account_id', '')
+  }, [creditCardId, form, mode])
 
   const loadCategories = useCallback(
     async (search: string): Promise<SearchSelectOption[]> => {
@@ -115,34 +135,29 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
   }, [])
 
   const handleSubmit = async (values: AccountFormValues) => {
-    const allocations = values.use_allocations
-      ? values.allocations.map((row) => ({
-          cost_center_id: row.cost_center_id || null,
-          company_id: row.company_id || null,
-          category_id: row.category_id,
-          value: row.value === '' ? undefined : Number(row.value),
-          percentage: row.percentage === '' ? undefined : Number(row.percentage),
-        }))
-      : null
+    const hasCreditCard = Boolean(values.credit_card_id)
 
     const payload: AccountPayload = {
-      type: values.type,
+      type: hasCreditCard ? 'payable' : values.type,
       description: values.description,
       counterparty: values.counterparty || null,
-      bank_account_id: values.use_allocations ? null : values.bank_account_id,
+      bank_account_id: hasCreditCard ? null : values.bank_account_id || null,
+      credit_card_id: hasCreditCard ? values.credit_card_id : null,
       company_id: values.company_id || null,
       cost_center_id: values.cost_center_id || null,
-      category_id: values.use_allocations ? null : values.category_id,
-      subcategory_id: values.use_allocations ? null : values.subcategory_id || null,
+      category_id: values.category_id,
+      subcategory_id: values.subcategory_id || null,
       value: Number(values.value),
-      due_date: values.due_date,
+      due_date: hasCreditCard ? null : values.due_date,
+      purchase_date: values.purchase_date || null,
       expected_date: values.expected_date || null,
       paid_date: mode === 'edit' ? values.paid_date || null : undefined,
       observation: values.observation || null,
-      allocations,
       installments:
         mode === 'create' && values.installments
-          ? { quantity: Number(values.installment_quantity), interval: values.installment_interval }
+          ? hasCreditCard
+            ? { quantity: Number(values.installment_quantity) }
+            : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
           : null,
     }
 
@@ -165,6 +180,7 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
           >
             <RadioGroupField
               name="type"
+              disabled={usingCreditCard}
               options={[
                 { value: 'payable', label: 'Conta a pagar' },
                 { value: 'receivable', label: 'Conta a receber' },
@@ -180,7 +196,17 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
                 label={type === 'receivable' ? 'Cliente' : 'Fornecedor'}
                 className="sm:col-span-2"
               />
-              {!useAllocations && (
+              {mode === 'create' && (
+                <SelectField
+                  name="credit_card_id"
+                  label="Cartão de crédito"
+                  options={creditCards.data ?? []}
+                  placeholder="Nenhum (fluxo normal)"
+                  hint="Se informado, o vencimento segue o ciclo da fatura do cartão."
+                  className="sm:col-span-2"
+                />
+              )}
+              {!usingCreditCard && (
                 <SelectField
                   name="bank_account_id"
                   label="Conta bancária"
@@ -201,39 +227,35 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
                 options={costCenters.data ?? []}
                 placeholder="Opcional"
               />
-              {!useAllocations && (
-                <>
-                  <SearchSelectField
-                    name="category_id"
-                    label="Categoria"
-                    loadOptions={loadCategories}
-                    resolveLabel={resolveLabel}
-                    placeholder="Buscar categoria..."
-                    required
-                    onSelectOption={(option) => {
-                      const subcategoryId = form.getValues('subcategory_id')
-                      if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
-                        form.setValue('subcategory_id', '')
-                        setSelectedSubcategory(null)
-                      }
-                    }}
-                  />
-                  <SearchSelectField
-                    name="subcategory_id"
-                    label="Subcategoria"
-                    loadOptions={loadSubcategories}
-                    resolveLabel={resolveLabel}
-                    placeholder="Buscar subcategoria..."
-                    onSelectOption={(option) => {
-                      setSelectedSubcategory(option)
-                      const categoryId = form.getValues('category_id')
-                      if (option.parent_id && option.parent_id !== categoryId) {
-                        form.setValue('category_id', option.parent_id)
-                      }
-                    }}
-                  />
-                </>
-              )}
+              <SearchSelectField
+                name="category_id"
+                label="Categoria"
+                loadOptions={loadCategories}
+                resolveLabel={resolveLabel}
+                placeholder="Buscar categoria..."
+                required
+                onSelectOption={(option) => {
+                  const subcategoryId = form.getValues('subcategory_id')
+                  if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
+                    form.setValue('subcategory_id', '')
+                    setSelectedSubcategory(null)
+                  }
+                }}
+              />
+              <SearchSelectField
+                name="subcategory_id"
+                label="Subcategoria"
+                loadOptions={loadSubcategories}
+                resolveLabel={resolveLabel}
+                placeholder="Buscar subcategoria..."
+                onSelectOption={(option) => {
+                  setSelectedSubcategory(option)
+                  const categoryId = form.getValues('category_id')
+                  if (option.parent_id && option.parent_id !== categoryId) {
+                    form.setValue('category_id', option.parent_id)
+                  }
+                }}
+              />
               <TextField
                 name="value"
                 label="Valor"
@@ -243,7 +265,23 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
                 required
                 hint={hasSettlement ? 'Alterações refletem no fluxo de caixa realizado.' : undefined}
               />
-              <TextField name="due_date" label="Data de vencimento" type="date" required />
+              <TextField
+                name="purchase_date"
+                label="Data da compra"
+                type="date"
+                required={usingCreditCard}
+                hint={
+                  usingCreditCard
+                    ? 'O vencimento é calculado pelo ciclo da fatura do cartão.'
+                    : 'Opcional'
+                }
+              />
+              {!usingCreditCard && (
+                <TextField name="due_date" label="Data de vencimento" type="date" required />
+              )}
+              {mode === 'edit' && usingCreditCard && (
+                <TextField name="due_date" label="Data de vencimento" type="date" disabled />
+              )}
               {mode === 'edit' && hasSettlement && (
                 <TextField
                   name="paid_date"
@@ -253,36 +291,44 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
                   hint="Alterações refletem no fluxo de caixa realizado."
                 />
               )}
-              <TextField name="expected_date" label={type === 'receivable' ? 'Data prevista de recebimento' : 'Data prevista de pagamento'} type="date" />
+              {!usingCreditCard && (
+                <TextField
+                  name="expected_date"
+                  label={type === 'receivable' ? 'Data prevista de recebimento' : 'Data prevista de pagamento'}
+                  type="date"
+                />
+              )}
             </div>
           </Section>
-
-          {mode === 'create' && (
-            <Section title="Rateio" description="Divida o valor entre centros de custo, empresas e categorias.">
-              <SwitchField name="use_allocations" label="Usar rateio neste lançamento" />
-              <AllocationSection />
-            </Section>
-          )}
 
           <Section title="Observação">
             <TextareaField name="observation" rows={3} />
           </Section>
 
           {mode === 'create' && (
-            <Section title="Parcelamento" description="Divida o valor em parcelas iguais.">
+            <Section
+              title="Parcelamento"
+              description={
+                usingCreditCard
+                  ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma.'
+                  : 'Divida o valor em parcelas iguais.'
+              }
+            >
               <SwitchField name="installments" label="Parcelar este lançamento" />
               {installments && (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <TextField name="installment_quantity" label="Quantidade de parcelas" type="number" min="1" max="120" />
-                  <SelectField
-                    name="installment_interval"
-                    label="Intervalo entre parcelas"
-                    options={[
-                      { value: 'daily', label: 'Diário' },
-                      { value: 'weekly', label: 'Semanal' },
-                      { value: 'monthly', label: 'Mensal' },
-                    ]}
-                  />
+                  {!usingCreditCard && (
+                    <SelectField
+                      name="installment_interval"
+                      label="Intervalo entre parcelas"
+                      options={[
+                        { value: 'daily', label: 'Diário' },
+                        { value: 'weekly', label: 'Semanal' },
+                        { value: 'monthly', label: 'Mensal' },
+                      ]}
+                    />
+                  )}
                 </div>
               )}
             </Section>

@@ -569,7 +569,8 @@ final class AssistantTools
     {
         return round(
             (float) Settlement::query()
-                ->whereBetween('settled_at', [$from, $to])
+                ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
                 ->whereHas('account', fn ($q) => $q->where('type', $type->value))
                 ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
                 ->sum('value'),
@@ -580,7 +581,7 @@ final class AssistantTools
     private function netSettled(Carbon $upTo, ?string $bankAccountId): float
     {
         $base = fn () => Settlement::query()
-            ->where('settled_at', '<=', $upTo)
+            ->whereDate('settled_at', '<=', $upTo->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)));
 
         $in = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Receivable->value))->sum('value');

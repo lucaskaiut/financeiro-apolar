@@ -20,6 +20,7 @@ import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
+import { toast } from '@/shared/stores/toast.store'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import type { BankTransaction } from '@/shared/types/models'
 import {
@@ -51,7 +52,7 @@ export default function ReconciliationPage() {
   const ignore = useIgnoreTransaction()
   const undo = useUndoReconciliation()
 
-  const [bankAccountId, setCostCenterId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [fileName, setFileName] = useState('')
@@ -62,12 +63,16 @@ export default function ReconciliationPage() {
 
   const handleFile = async (file: File | null) => {
     if (!file) return
+
+    if (!bankAccountId) {
+      toast.error('Conta bancária', 'Selecione a conta bancária do extrato antes de importar.')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
     setFileName(file.name)
     const content = await file.text()
-    const cc = bankAccountId || bankAccounts.data?.[0]?.value
-
-    if (!cc) return
-    await importOfx.mutateAsync({ bankAccountId: cc, content })
+    await importOfx.mutateAsync({ bankAccountId, content })
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -76,6 +81,16 @@ export default function ReconciliationPage() {
       key: 'date',
       header: 'Data',
       render: (t) => <span className="text-muted">{formatDate(t.date)}</span>,
+    },
+    {
+      key: 'bank_account',
+      header: 'Conta',
+      render: (t) => <span className="text-muted">{t.bank_account ?? '—'}</span>,
+    },
+    {
+      key: 'description',
+      header: 'Histórico',
+      render: (t) => <span className="text-foreground">{t.description ?? '—'}</span>,
     },
     {
       key: 'value',
@@ -132,13 +147,13 @@ export default function ReconciliationPage() {
         <Card>
           <CardContent className="flex flex-wrap items-end gap-3">
             <div className="min-w-56 flex-1">
-              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Conta bancária</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Conta do extrato</label>
               <Select
-                aria-label="Conta bancária"
+                aria-label="Conta do extrato"
                 value={bankAccountId}
-                onChange={(e) => setCostCenterId(e.target.value)}
+                onChange={(e) => setBankAccountId(e.target.value)}
                 options={bankAccounts.data ?? []}
-                placeholder="Selecione"
+                placeholder="Selecione para importar"
               />
             </div>
             <div className="min-w-56 flex-1">

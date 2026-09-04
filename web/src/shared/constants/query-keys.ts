@@ -74,8 +74,8 @@ export const queryKeys = {
     all: ['reconciliation'] as const,
     list: (params: ListParams & { status?: string; bank_account_id?: string }) =>
       ['reconciliation', 'transactions', params] as const,
-    candidates: (id: string, from?: string, to?: string) =>
-      ['reconciliation', 'candidates', id, { from, to }] as const,
+    candidates: (id: string, from?: string, to?: string, exact?: boolean) =>
+      ['reconciliation', 'candidates', id, { from, to, exact }] as const,
   },
 
   reports: {
@@ -108,6 +108,7 @@ export interface AccountListParams extends ListParams {
   status?: string
   overdue?: boolean | string
   bank_account_id?: string
+  credit_card_id?: string
   cost_center_id?: string
   company_id?: string
   category_id?: string

@@ -27,7 +27,16 @@ class CashFlowService
 
         $settlements = Settlement::query()
             ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name,type'])
-            ->whereBetween('settled_at', [$fromDate, $toDate])
+            ->whereDate('settled_at', '>=', $fromDate->toDateString())
+            ->whereDate('settled_at', '<=', $toDate->toDateString())
+            ->where(function ($query): void {
+                $query->whereNull('method')
+                    ->orWhere('method', '!=', 'credit_card_invoice');
+            })
+            ->whereHas('account', fn ($a) => $a->where(function ($query): void {
+                $query->where('is_card_purchase', false)
+                    ->orWhere('is_card_invoice_payable', true);
+            }))
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
             ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
             ->orderBy('settled_at')
@@ -105,6 +114,8 @@ class CashFlowService
             ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type'])
             ->withSum('settlements', 'value')
             ->whereIn('status', ['open', 'partial'])
+            // Compras do cartão não afetam caixa bancário; só a fatura.
+            ->where('is_card_purchase', false)
             ->whereDate('due_date', '>=', $fromDate->toDateString())
             ->whereDate('due_date', '<=', $toDate->toDateString())
             ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
@@ -190,8 +201,11 @@ class CashFlowService
     private function netSettled(Carbon $upTo, ?string $bankAccountId, ?string $categoryId): float
     {
         $base = fn () => Settlement::query()
-            ->where('settled_at', '<=', $upTo)
-            ->where('method', '!=', 'credit_card_invoice')
+            ->whereDate('settled_at', '<=', $upTo->toDateString())
+            ->where(function ($query): void {
+                $query->whereNull('method')
+                    ->orWhere('method', '!=', 'credit_card_invoice');
+            })
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
             ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
             ->whereHas('account', fn ($a) => $a->where(function ($query): void {

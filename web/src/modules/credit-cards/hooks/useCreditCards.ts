@@ -5,7 +5,6 @@ import { toast } from '@/shared/stores/toast.store'
 import {
   creditCardsService,
   type CreditCardPayload,
-  type PurchasePayload,
 } from '../services/credit-cards.service'
 
 export function useCreditCardsQuery(params: ListParams) {
@@ -76,19 +75,6 @@ export function useDeleteCreditCard() {
   })
 }
 
-export function useCreatePurchase(cardId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (payload: PurchasePayload) => creditCardsService.createPurchase(cardId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
-      toast.success('Compra registrada', 'A compra no cartão foi registrada.')
-    },
-  })
-}
-
 export function useCloseInvoice(cardId: string) {
   const queryClient = useQueryClient()
 
@@ -97,7 +83,7 @@ export function useCloseInvoice(cardId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
-      toast.success('Fatura fechada', 'A fatura foi fechada e a conta a pagar foi gerada.')
+      toast.success('Fatura fechada', 'A fatura foi fechada. As compras foram mantidas e a conta a pagar está pronta para conciliação.')
     },
   })
 }

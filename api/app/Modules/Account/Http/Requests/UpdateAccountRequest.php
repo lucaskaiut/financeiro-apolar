@@ -4,6 +4,7 @@ namespace App\Modules\Account\Http\Requests;
 
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Category\Models\Category;
+use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -45,6 +46,7 @@ class UpdateAccountRequest extends FormRequest
             ],
             'value' => ['sometimes', 'required', 'numeric', 'gt:0'],
             'due_date' => ['sometimes', 'required', 'date'],
+            'purchase_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'paid_date' => ['nullable', 'date'],
             'observation' => ['nullable', 'string'],
@@ -61,7 +63,40 @@ class UpdateAccountRequest extends FormRequest
             $this->merge(['paid_date' => null]);
         }
 
+        $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date', 'paid_date']);
+
         $this->fillCategoryFromSubcategory();
+    }
+
+    /**
+     * @param  list<string>  $fields
+     */
+    private function mergeDateOnlyFields(array $fields): void
+    {
+        $merged = [];
+
+        foreach ($fields as $field) {
+            if (! $this->exists($field)) {
+                continue;
+            }
+
+            $value = $this->input($field);
+
+            if ($value === null || $value === '') {
+                $merged[$field] = null;
+                continue;
+            }
+
+            try {
+                $merged[$field] = DateOnly::normalize($value);
+            } catch (\InvalidArgumentException) {
+                // Mantém o valor original para a validação `date` falhar com mensagem clara.
+            }
+        }
+
+        if ($merged !== []) {
+            $this->merge($merged);
+        }
     }
 
     private function fillCategoryFromSubcategory(): void

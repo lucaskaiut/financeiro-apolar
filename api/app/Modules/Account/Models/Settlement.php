@@ -2,6 +2,7 @@
 
 namespace App\Modules\Account\Models;
 
+use App\Modules\Shared\Casts\DateOnlyCast;
 use App\Modules\Shared\Models\Concerns\HasUuid;
 use App\Modules\Tenant\Models\Concerns\BelongsToTenant;
 use App\Modules\User\Models\User;
@@ -26,7 +27,7 @@ class Settlement extends Model
     {
         return [
             'value' => 'decimal:2',
-            'settled_at' => 'date',
+            'settled_at' => DateOnlyCast::class,
         ];
     }
 

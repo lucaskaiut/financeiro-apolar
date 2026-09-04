@@ -3,30 +3,22 @@ import type { ApiResponse, PaginatedResponse } from '@/shared/types/api'
 import type { Account, AccountDocument } from '@/shared/types/models'
 import type { AccountListParams } from '@/shared/constants/query-keys'
 
-export interface AccountAllocationPayload {
-  cost_center_id?: string | null
-  company_id?: string | null
-  category_id?: string | null
-  subcategory_id?: string | null
-  value?: number
-  percentage?: number
-}
-
 export interface AccountPayload {
   type: 'payable' | 'receivable'
   description: string
   counterparty?: string | null
   bank_account_id?: string | null
+  credit_card_id?: string | null
   company_id?: string | null
   cost_center_id?: string | null
   category_id?: string | null
   subcategory_id?: string | null
   value: number
-  due_date: string
+  due_date?: string | null
+  purchase_date?: string | null
   expected_date?: string | null
   paid_date?: string | null
   observation?: string | null
-  allocations?: AccountAllocationPayload[] | null
   installments?: { quantity: number; interval?: 'daily' | 'weekly' | 'monthly' } | null
 }
 

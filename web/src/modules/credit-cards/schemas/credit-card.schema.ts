@@ -12,20 +12,6 @@ export const creditCardSchema = z.object({
 
 export type CreditCardFormValues = z.infer<typeof creditCardSchema>
 
-export const purchaseSchema = z.object({
-  description: z.string().min(1, 'Informe a descrição'),
-  counterparty: z.string(),
-  company_id: z.string(),
-  cost_center_id: z.string(),
-  category_id: z.string().min(1, 'Selecione a categoria'),
-  subcategory_id: z.string(),
-  value: z.string().refine((v) => v !== '' && Number(v) > 0, 'Informe um valor maior que zero'),
-  due_date: z.string().min(1, 'Informe a data'),
-  observation: z.string(),
-})
-
-export type PurchaseFormValues = z.infer<typeof purchaseSchema>
-
 export const closeInvoiceSchema = z.object({
   reference_month: z.string().min(1, 'Informe o mês de referência'),
 })

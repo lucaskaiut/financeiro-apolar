@@ -12,12 +12,19 @@ export default function AccountCreatePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const cloneId = searchParams.get('clone')
+  const creditCardId = searchParams.get('credit_card_id') ?? ''
 
   const create = useCreateAccount()
   const cloneQuery = useAccountQuery(cloneId ?? undefined)
 
   const isCloning = Boolean(cloneId)
   const cloneReady = !isCloning || cloneQuery.isSuccess
+
+  const defaultValues = cloneQuery.data
+    ? accountToCloneFormValues(cloneQuery.data)
+    : creditCardId
+      ? { credit_card_id: creditCardId, type: 'payable' as const }
+      : undefined
 
   return (
     <Page>
@@ -49,9 +56,9 @@ export default function AccountCreatePage() {
 
         {cloneReady && (!isCloning || cloneQuery.data) && (
           <AccountForm
-            key={isCloning ? `clone-${cloneQuery.data!.id}` : 'new'}
+            key={isCloning ? `clone-${cloneQuery.data!.id}` : creditCardId ? `card-${creditCardId}` : 'new'}
             mode="create"
-            defaultValues={cloneQuery.data ? accountToCloneFormValues(cloneQuery.data) : undefined}
+            defaultValues={defaultValues}
             submitting={create.isPending}
             onSubmit={async (payload, documents) => {
               const result = await create.mutateAsync(payload)

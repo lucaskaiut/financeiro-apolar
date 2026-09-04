@@ -99,7 +99,7 @@ export default function CompaniesListPage() {
     <Page>
       <PageHeader
         title="Empresas"
-        description="Cadastre empresas para classificação de lançamentos e rateios."
+        description="Cadastre empresas para classificação de lançamentos."
         breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Empresas' }]}
         actions={
           <Can permission={Permission.COMPANIES_CREATE}>

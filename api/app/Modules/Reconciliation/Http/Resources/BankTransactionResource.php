@@ -27,6 +27,12 @@ class BankTransactionResource extends JsonResource
             'transaction_id' => $this->transaction_id,
             'status' => $this->status,
             'matched_account' => $this->whenLoaded('reconciliation', fn () => $this->reconciliation?->account?->only(['uuid', 'description'])),
+            'matched_accounts' => $this->whenLoaded('reconciliations', function () {
+                return $this->reconciliations
+                    ->filter(fn ($item) => $item->reversed_at === null && $item->account !== null)
+                    ->map(fn ($item) => $item->account->only(['uuid', 'description']))
+                    ->values();
+            }),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

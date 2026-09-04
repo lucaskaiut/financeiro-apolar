@@ -107,7 +107,8 @@ class ReportService
 
         $settlements = Settlement::query()
             ->with(['account.costCenter:id,uuid,name'])
-            ->whereBetween('settled_at', [$from, $to])
+            ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
@@ -296,6 +297,7 @@ class ReportService
             ->with(['bankAccount:id,uuid,name'])
             ->withSum('settlements', 'value')
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
+            ->where('is_card_purchase', false)
             ->whereDate('due_date', '>=', $fromDate->toDateString())
             ->whereDate('due_date', '<=', $toDate->toDateString())
             ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId));
@@ -473,7 +475,8 @@ class ReportService
                 'account.subcategory:id,uuid,name',
                 'account.costCenter:id,uuid,name',
             ])
-            ->whereBetween('settled_at', [$from, $to])
+            ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
@@ -777,7 +780,8 @@ class ReportService
 
         $settlements = Settlement::query()
             ->with(['account.category:id,uuid,name,type', 'account.costCenter:id,uuid,name'])
-            ->whereBetween('settled_at', [$from, $to])
+            ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
             ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
@@ -947,6 +951,7 @@ class ReportService
             ->withSum('settlements', 'value')
             ->where('type', AccountType::Payable)
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
+            ->where('is_card_purchase', false)
             ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->whereDate('due_date', '<=', $to->toDateString())
             ->when($from, fn ($q) => $q->where(function ($inner) use ($from, $today): void {

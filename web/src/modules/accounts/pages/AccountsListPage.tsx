@@ -17,6 +17,7 @@ import {
   Pagination,
   SearchInput,
   SegmentedControl,
+  Select,
   type Column,
 } from '@/shared/design-system'
 import { Can } from '@/app/guards/PermissionGuard'
@@ -24,6 +25,7 @@ import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { useDebounce } from '@/shared/hooks/useDebounce'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { cn } from '@/shared/utils/cn'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
 import type { Account } from '@/shared/types/models'
@@ -73,6 +75,7 @@ export default function AccountsListPage() {
   const status = searchParams.get('status') ?? ''
   const overdue = searchParams.get('overdue') === '1'
   const bankAccountId = searchParams.get('bank_account_id') ?? ''
+  const creditCardId = searchParams.get('credit_card_id') ?? ''
 
   useEffect(() => {
     setDueFrom(searchParams.get('due_from') ?? '')
@@ -84,6 +87,7 @@ export default function AccountsListPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const bankAccounts = useBankAccountOptions()
+  const creditCards = useCreditCardOptions()
 
   const [toDelete, setToDelete] = useState<Account | null>(null)
   const [toCancel, setToCancel] = useState<Account | null>(null)
@@ -102,6 +106,7 @@ export default function AccountsListPage() {
     status: overdue ? undefined : status || undefined,
     overdue: overdue || undefined,
     bank_account_id: bankAccountId || undefined,
+    credit_card_id: creditCardId || undefined,
     due_from: dueFrom || undefined,
     due_to: dueTo || undefined,
     paid_from: paidFrom || undefined,
@@ -115,6 +120,7 @@ export default function AccountsListPage() {
     status?: string
     overdue?: string
     bank_account_id?: string
+    credit_card_id?: string
     due_from?: string
     due_to?: string
     paid_from?: string
@@ -141,6 +147,10 @@ export default function AccountsListPage() {
       }
       if (next.bank_account_id !== undefined) {
         next.bank_account_id ? params.set('bank_account_id', next.bank_account_id) : params.delete('bank_account_id')
+        params.delete('page')
+      }
+      if (next.credit_card_id !== undefined) {
+        next.credit_card_id ? params.set('credit_card_id', next.credit_card_id) : params.delete('credit_card_id')
         params.delete('page')
       }
       if (next.due_from !== undefined) {
@@ -174,19 +184,28 @@ export default function AccountsListPage() {
     {
       key: 'description',
       header: 'Lançamento',
-      render: (a) => (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="truncate font-medium text-foreground">{a.description}</p>
-            {a.installment_number !== null && (
-              <Badge variant="neutral">
-                {a.installment_number}/{a.installment_total}
-              </Badge>
-            )}
+      render: (a) => {
+        const meta = [
+          a.category?.name,
+          a.credit_card ? `Cartão: ${a.credit_card}` : null,
+          !a.credit_card ? a.bank_account : null,
+          a.counterparty,
+        ].filter(Boolean)
+
+        return (
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="truncate font-medium text-foreground">{a.description}</p>
+              {a.installment_number !== null && (
+                <Badge variant="neutral">
+                  {a.installment_number}/{a.installment_total}
+                </Badge>
+              )}
+            </div>
+            <p className="truncate text-[13px] text-muted">{meta.length > 0 ? meta.join(' · ') : '—'}</p>
           </div>
-          <p className="truncate text-[13px] text-muted">{a.counterparty ?? a.bank_account ?? '—'}</p>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'value',
@@ -201,6 +220,13 @@ export default function AccountsListPage() {
             <p className="text-[13px] text-muted">{formatCurrency(a.remaining_amount)} restante</p>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'purchase_date',
+      header: 'Data da compra',
+      render: (a) => (
+        <span className="text-muted">{formatDate(a.purchase_date ?? null)}</span>
       ),
     },
     {
@@ -236,7 +262,9 @@ export default function AccountsListPage() {
           {a.status === 'settled' && a.settlements?.length && can(Permission.ACCOUNTS_SETTLE) && (
             <UnsettleButton account={a} />
           )}
-          {(a.status === 'open' || a.status === 'partial') && can(Permission.ACCOUNTS_SETTLE) && (
+          {(a.status === 'open' || a.status === 'partial')
+            && !a.is_card_purchase
+            && can(Permission.ACCOUNTS_SETTLE) && (
             <Button variant="ghost" size="sm" onClick={() => setToSettle(a)} aria-label={`Baixar ${a.description}`} className="text-success hover:bg-success-soft hover:text-success">
               <CheckCircle2 className="size-4" />
             </Button>
@@ -339,35 +367,28 @@ export default function AccountsListPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[13px] text-muted">Conta bancária:</span>
-            <button
-              type="button"
-              onClick={() => updateParams({ bank_account_id: '' })}
-              className={cn(
-                'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-                bankAccountId === ''
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-surface-2 text-muted hover:bg-surface-3 hover:text-foreground',
-              )}
-            >
-              Todos
-            </button>
-            {(bankAccounts.data ?? []).map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => updateParams({ bank_account_id: option.value })}
-                className={cn(
-                  'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-                  bankAccountId === option.value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-surface-2 text-muted hover:bg-surface-3 hover:text-foreground',
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block min-w-0">
+              <span className="mb-1.5 block text-[13px] font-medium text-foreground">Conta bancária</span>
+              <Select
+                aria-label="Filtrar por conta bancária"
+                value={bankAccountId}
+                placeholder="Todas"
+                options={bankAccounts.data ?? []}
+                onChange={(e) => updateParams({ bank_account_id: e.target.value })}
+              />
+            </label>
+
+            <label className="block min-w-0">
+              <span className="mb-1.5 block text-[13px] font-medium text-foreground">Cartão de crédito</span>
+              <Select
+                aria-label="Filtrar por cartão de crédito"
+                value={creditCardId}
+                placeholder="Todos"
+                options={creditCards.data ?? []}
+                onChange={(e) => updateParams({ credit_card_id: e.target.value })}
+              />
+            </label>
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row">

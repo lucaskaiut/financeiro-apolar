@@ -32,9 +32,21 @@ class CreateFromTransactionRequest extends FormRequest
                 'string',
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
+            'cost_center_id' => [
+                'nullable',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
             'value' => ['nullable', 'numeric', 'gt:0'],
             'due_date' => ['nullable', 'date'],
             'observation' => ['nullable', 'string'],
+            'account_ids' => ['nullable', 'array'],
+            'account_ids.*' => [
+                'required',
+                'string',
+                'uuid',
+                Rule::exists('financial_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
         ];
     }
 
@@ -42,6 +54,10 @@ class CreateFromTransactionRequest extends FormRequest
     {
         if ($this->filled('value')) {
             $this->merge(['value' => (float) $this->input('value')]);
+        }
+
+        if ($this->input('cost_center_id') === '') {
+            $this->merge(['cost_center_id' => null]);
         }
     }
 }

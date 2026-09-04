@@ -2,6 +2,7 @@
 
 namespace App\Modules\CreditCard\Http\Requests;
 
+use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,17 +26,28 @@ class StoreCreditCardPurchaseRequest extends FormRequest
             'counterparty' => ['nullable', 'string', 'max:255'],
             'company_id' => ['nullable', 'string', Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
             'cost_center_id' => ['nullable', 'string', Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
-            'category_id' => ['required_without:allocations', 'nullable', 'string', Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
+            'category_id' => ['required', 'string', Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
             'subcategory_id' => ['nullable', 'string', Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
             'value' => ['required', 'numeric', 'gt:0'],
-            'due_date' => ['required', 'date'],
+            'purchase_date' => ['required', 'date'],
             'observation' => ['nullable', 'string'],
-            'allocations' => ['nullable', 'array', 'min:1'],
-            'allocations.*.cost_center_id' => ['nullable', 'string', Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
-            'allocations.*.company_id' => ['nullable', 'string', Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
-            'allocations.*.category_id' => ['nullable', 'string', Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId))],
-            'allocations.*.value' => ['nullable', 'numeric', 'gt:0'],
-            'allocations.*.percentage' => ['nullable', 'numeric', 'gt:0', 'lte:100'],
+            'installments' => ['nullable', 'array:quantity'],
+            'installments.quantity' => ['required_with:installments', 'integer', 'min:1', 'max:120'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('value')) {
+            $this->merge(['value' => (float) $this->input('value')]);
+        }
+
+        if ($this->filled('purchase_date')) {
+            try {
+                $this->merge(['purchase_date' => DateOnly::normalize($this->input('purchase_date'))]);
+            } catch (\InvalidArgumentException) {
+                // Mantém o valor original para a validação `date` falhar.
+            }
+        }
     }
 }

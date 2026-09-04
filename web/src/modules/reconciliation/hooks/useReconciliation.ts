@@ -11,10 +11,10 @@ export function useReconciliationQuery(params: ReconciliationListParams) {
   })
 }
 
-export function useCandidates(id: string | undefined, from?: string, to?: string) {
+export function useCandidates(id: string | undefined, from?: string, to?: string, exact = true) {
   return useQuery({
-    queryKey: queryKeys.reconciliation.candidates(id ?? '', from, to),
-    queryFn: () => reconciliationService.candidates(id!, from, to),
+    queryKey: queryKeys.reconciliation.candidates(id ?? '', from, to, exact),
+    queryFn: () => reconciliationService.candidates(id!, from, to, exact),
     enabled: !!id,
   })
 }
@@ -63,6 +63,23 @@ export function useReconcile() {
   })
 }
 
+export function useReconcileMany() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ transactions, accounts }: { transactions: string[]; accounts: string[] }) =>
+      reconciliationService.reconcileMany(transactions, accounts),
+    onSuccess: (_data, variables) => {
+      invalidate(queryClient)
+      const count = variables.accounts.length
+      toast.success(
+        'Transação conciliada',
+        count > 1 ? `${count} lançamentos foram baixados.` : 'A baixa automática foi registrada.',
+      )
+    },
+  })
+}
+
 export function useIgnoreTransaction() {
   const queryClient = useQueryClient()
 
@@ -101,13 +118,21 @@ export function useCreateAccountFromTransaction() {
         description: string
         category_id: string
         bank_account_id?: string
+        cost_center_id?: string | null
         value?: number
         due_date?: string
+        account_ids?: string[]
       }
     }) => reconciliationService.createAccount(id, payload),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidate(queryClient)
-      toast.success('Lançamento criado', 'O lançamento foi criado a partir do extrato.')
+      const linked = variables.payload.account_ids?.length ?? 0
+      toast.success(
+        linked > 0 ? 'Conciliação concluída' : 'Lançamento criado',
+        linked > 0
+          ? `Novo lançamento criado e ${linked + 1} contas baixadas.`
+          : 'O lançamento foi criado a partir do extrato.',
+      )
     },
   })
 }

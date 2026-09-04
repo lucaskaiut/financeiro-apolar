@@ -74,7 +74,11 @@ export function TextField({
               id={name}
               invalid={!!error}
               value={(field.value as string) ?? ''}
-              onChange={field.onChange}
+              onChange={(event) => {
+                const nextValue =
+                  typeof event === 'string' ? event : (event?.target?.value ?? '')
+                field.onChange(nextValue)
+              }}
               onBlur={field.onBlur}
               name={field.name}
               ref={field.ref}

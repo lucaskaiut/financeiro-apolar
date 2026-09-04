@@ -94,6 +94,12 @@ php -r '
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     if ($user !== false && $user !== "" && $user !== "root") {
         try {
+            $pass = getenv("DB_PASSWORD");
+            if ($pass === false || $pass === "") {
+                $pass = "secret";
+            }
+            $pdo->exec("CREATE USER IF NOT EXISTS \"{$user}\"@\"%\" IDENTIFIED BY " . $pdo->quote($pass));
+            $pdo->exec("ALTER USER \"{$user}\"@\"%\" IDENTIFIED BY " . $pdo->quote($pass));
             $pdo->exec("GRANT ALL PRIVILEGES ON `{$db}`.* TO \"{$user}\"@\"%\"");
             $pdo->exec("FLUSH PRIVILEGES");
         } catch (Throwable $e) {

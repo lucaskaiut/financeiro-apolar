@@ -28,11 +28,11 @@ export function toLocalIsoDate(date: Date = new Date()): string {
 
 /**
  * Interpreta strings de data:
- * - "YYYY-MM-DD" (data pura) → data local, evitando o deslocamento de fuso.
- * - ISO com horário/timezone → `new Date` normalmente.
+ * - Prefixo "YYYY-MM-DD" (data pura ou ISO com horário) → data local, sem deslocar o dia.
+ * - Outros formatos → `new Date` normalmente.
  */
 function parseDateInput(value: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
 
   if (match) {
     return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))

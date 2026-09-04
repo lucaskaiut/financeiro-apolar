@@ -79,22 +79,24 @@ export default function AccountEditPage() {
 
             <AccountForm
               mode="edit"
+              isCardPurchase={!!query.data.is_card_purchase}
+              purchaseDate={query.data.purchase_date}
               defaultValues={{
                 type: query.data.type,
                 description: query.data.description,
                 counterparty: query.data.counterparty ?? '',
                 bank_account_id: query.data.bank_account_id ?? '',
+                credit_card_id: query.data.credit_card_id ?? '',
                 company_id: query.data.company_id ?? '',
                 cost_center_id: query.data.cost_center_id ?? '',
                 category_id: query.data.category_id ?? '',
                 subcategory_id: query.data.subcategory_id ?? '',
                 value: String(query.data.value),
                 due_date: query.data.due_date ?? '',
+                purchase_date: query.data.purchase_date ?? '',
                 expected_date: query.data.expected_date ?? '',
                 paid_date: query.data.paid_date ?? query.data.settlements?.at(-1)?.settled_at ?? '',
                 observation: query.data.observation ?? '',
-                use_allocations: false,
-                allocations: [],
                 installments: false,
                 installment_quantity: '2',
                 installment_interval: 'monthly',

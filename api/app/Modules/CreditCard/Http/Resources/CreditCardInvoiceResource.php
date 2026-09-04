@@ -2,6 +2,7 @@
 
 namespace App\Modules\CreditCard\Http\Resources;
 
+use App\Modules\Account\Http\Resources\AccountResource;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -25,8 +26,12 @@ class CreditCardInvoiceResource extends JsonResource
             'total_value' => (float) $this->total_value,
             'status' => $this->status?->value,
             'status_label' => $this->status?->label(),
-            'financial_account_id' => $this->whenLoaded('payable', fn () => $this->payable?->uuid),
-            'purchases_count' => $this->whenLoaded('purchases', fn () => $this->purchases->count()),
+            'financial_account_id' => $this->relationLoaded('payable')
+                ? $this->payable?->uuid
+                : null,
+            'purchases_count' => $this->purchases_count
+                ?? ($this->relationLoaded('purchases') ? $this->purchases->count() : null),
+            'purchases' => AccountResource::collection($this->whenLoaded('purchases')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

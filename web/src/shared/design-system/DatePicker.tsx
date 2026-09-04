@@ -211,12 +211,11 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   }
 
   const fieldClasses = cn(
-    'group/date flex h-10 w-full min-w-38 items-center rounded-lg bg-surface-2 transition-colors',
+    'datepicker-control group/date flex h-10 w-full min-w-38 items-center rounded-lg bg-surface-2 transition-shadow',
     'shadow-[inset_0_0_0_1px_var(--app-surface-3)]',
     'hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--app-fg-subtle)_55%,transparent)]',
-    (open || focused) && 'shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--app-primary)_45%,transparent)]',
     disabled && 'cursor-not-allowed opacity-60',
-    invalid && 'shadow-[inset_0_0_0_2px_color-mix(in_srgb,var(--app-danger)_55%,transparent)]',
+    invalid && 'datepicker-invalid',
   )
 
   return (
@@ -233,7 +232,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
           {...props}
         />
 
-        <div className={fieldClasses}>
+        <div className={fieldClasses} data-open={open ? 'true' : undefined}>
           <button
             type="button"
             tabIndex={-1}
@@ -277,7 +276,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
                 setOpen(true)
               }
             }}
-            className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-foreground outline-none placeholder:text-subtle disabled:cursor-not-allowed"
+            className="h-full min-w-0 flex-1 bg-transparent pr-3 text-sm text-foreground placeholder:text-subtle disabled:cursor-not-allowed"
           />
         </div>
       </div>

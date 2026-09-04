@@ -6,6 +6,10 @@ use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Exceptions\AccountUpdateException;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\CreditCard\Models\CreditCard;
+use App\Modules\CreditCard\Models\CreditCardInvoice;
+use App\Modules\CreditCard\Services\CreditCardService;
+use App\Modules\Shared\Support\DateOnly;
 use App\Modules\User\Models\User;
 use Carbon\Carbon;
 use App\Modules\Reconciliation\Models\Reconciliation;
@@ -17,11 +21,11 @@ use InvalidArgumentException;
 class AccountService
 {
     public function __construct(
-        private readonly AllocationService $allocations,
+        private readonly CreditCardService $creditCards,
     ) {}
 
     /**
-     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, bank_account_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
+     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
      */
     public function paginate(int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
@@ -30,10 +34,9 @@ class AccountService
                 'bankAccount:id,uuid,name',
                 'company:id,uuid,name',
                 'costCenter:id,uuid,name',
+                'creditCard:id,uuid,name',
                 'category:id,uuid,name,color,type',
                 'subcategory:id,uuid,name',
-                'allocations.costCenter:id,uuid,name',
-                'allocations.company:id,uuid,name',
             ])
             ->withSum('settlements', 'value');
 
@@ -49,6 +52,7 @@ class AccountService
         }
 
         $query->when(filled($filters['bank_account_id'] ?? null), fn ($q) => $q->where('bank_account_id', $filters['bank_account_id']));
+        $query->when(filled($filters['credit_card_id'] ?? null), fn ($q) => $q->where('credit_card_id', $filters['credit_card_id']));
         $query->when(filled($filters['cost_center_id'] ?? null), function ($q) use ($filters): void {
             $costCenterId = $filters['cost_center_id'];
             $q->where(function ($inner) use ($costCenterId): void {
@@ -79,6 +83,15 @@ class AccountService
             });
         });
 
+        // Compras já incluídas em fatura são liquidadas pelo pagamento da fatura —
+        // ocultar da listagem geral para não poluir "a pagar" (visíveis no cartão/fatura).
+        if (! filled($filters['credit_card_id'] ?? null)) {
+            $query->where(function ($q): void {
+                $q->where('is_card_purchase', false)
+                    ->orWhereNull('credit_card_invoice_id');
+            });
+        }
+
         return $query
             ->orderBy('due_date')
             ->orderBy('id')
@@ -92,10 +105,9 @@ class AccountService
                 'bankAccount:id,uuid,name',
                 'company:id,uuid,name',
                 'costCenter:id,uuid,name',
+                'creditCard:id,uuid,name',
                 'category:id,uuid,name,color,type',
                 'subcategory:id,uuid,name',
-                'allocations.costCenter:id,uuid,name',
-                'allocations.company:id,uuid,name',
                 'settlements' => fn ($q) => $q->orderBy('settled_at'),
             ])
             ->withSum('settlements', 'value')
@@ -110,16 +122,10 @@ class AccountService
     public function create(array $data): array
     {
         $installments = $data['installments'] ?? null;
-        $rawAllocations = $data['allocations'] ?? null;
         unset($data['installments'], $data['allocations']);
 
-        if (! empty($rawAllocations)) {
-            $data['allocations'] = $this->allocations->normalize((float) $data['value'], $rawAllocations);
-            $data['allocation_mode'] = 'split';
-        }
-
         if (! empty($data['credit_card_id'])) {
-            $data['is_card_purchase'] = true;
+            return $this->createCardPurchase($data, $installments);
         }
 
         if ($installments === null || (int) ($installments['quantity'] ?? 1) <= 1) {
@@ -131,20 +137,40 @@ class AccountService
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  array{quantity?: int, interval?: string}|null  $installments
+     * @return list<FinancialAccount>
+     */
+    private function createCardPurchase(array $data, ?array $installments): array
+    {
+        $card = CreditCard::query()->where('uuid', $data['credit_card_id'])->firstOrFail();
+
+        $quantity = max(1, (int) ($installments['quantity'] ?? 1));
+
+        return $this->creditCards->createPurchase($card, [
+            'description' => $data['description'],
+            'counterparty' => $data['counterparty'] ?? null,
+            'company_id' => $data['company_id'] ?? null,
+            'cost_center_id' => $data['cost_center_id'] ?? null,
+            'category_id' => $data['category_id'] ?? null,
+            'subcategory_id' => $data['subcategory_id'] ?? null,
+            'value' => $data['value'],
+            'purchase_date' => $data['purchase_date'],
+            'observation' => $data['observation'] ?? null,
+            'installments' => $quantity > 1 ? ['quantity' => $quantity] : null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
      */
     private function persistAccount(array $data): FinancialAccount
     {
-        $allocations = $data['allocations'] ?? null;
         unset($data['allocations']);
 
-        return DB::transaction(function () use ($data, $allocations): FinancialAccount {
+        return DB::transaction(function () use ($data): FinancialAccount {
             $account = FinancialAccount::query()->create($data);
 
-            if (is_array($allocations) && $allocations !== []) {
-                $this->allocations->sync($account, $allocations);
-            }
-
-            return $account->refresh()->load(['bankAccount', 'company', 'costCenter', 'allocations']);
+            return $account->refresh()->load(['bankAccount', 'company', 'costCenter']);
         });
     }
 
@@ -161,7 +187,7 @@ class AccountService
         $group = (string) Str::uuid();
         $total = round((float) $data['value'], 2);
         $installmentValue = round($total / $quantity, 2);
-        $firstDueDate = Carbon::parse($data['due_date']);
+        $firstDueDate = DateOnly::parse($data['due_date']);
         $accounts = [];
 
         $accumulated = 0.0;
@@ -180,7 +206,8 @@ class AccountService
             $accounts[] = $this->persistAccount([
                 ...$data,
                 'value' => $value,
-                'due_date' => $dueDate->toDateString(),
+                'due_date' => DateOnly::normalize($dueDate),
+                'purchase_date' => DateOnly::normalize($data['purchase_date'] ?? null),
                 'installment_group_id' => $group,
                 'installment_number' => $i,
                 'installment_total' => $quantity,
@@ -206,7 +233,6 @@ class AccountService
     {
         $hasSettlements = $account->settlements()->exists();
 
-        $rawAllocations = $data['allocations'] ?? null;
         unset($data['allocations']);
 
         $paidDateProvided = array_key_exists('paid_date', $data);
@@ -217,11 +243,6 @@ class AccountService
 
         $account->fill($data);
         $account->save();
-
-        if (is_array($rawAllocations)) {
-            $normalized = $this->allocations->normalize((float) $account->value, $rawAllocations);
-            $this->allocations->sync($account, $normalized);
-        }
 
         if ($hasSettlements && $valueChanged) {
             $this->syncSettlementValues($account);
@@ -246,6 +267,12 @@ class AccountService
      */
     public function settle(FinancialAccount $account, User $user, array $data): Settlement
     {
+        if ($account->is_card_purchase && ! $account->is_card_invoice_payable) {
+            throw new InvalidArgumentException(
+                'Compras no cartão são liquidadas pelo pagamento da fatura. Concilie ou baixe a conta da fatura.',
+            );
+        }
+
         $remaining = $account->remaining_amount;
 
         if ($remaining <= 0) {
@@ -268,6 +295,7 @@ class AccountService
         ]);
 
         $this->recomputeStatus($account);
+        $this->syncCardInvoicePaymentState($account->refresh());
 
         return $settlement;
     }
@@ -277,6 +305,7 @@ class AccountService
         $settlement->delete();
 
         $this->recomputeStatus($account);
+        $this->syncCardInvoicePaymentState($account->refresh());
     }
 
     /**
@@ -334,6 +363,7 @@ class AccountService
             $account->settlements()->delete();
             $this->markUnreconciled($account);
             $this->recomputeStatus($account->refresh());
+            $this->syncCardInvoicePaymentState($account);
 
             return [
                 'account' => $account->refresh(),
@@ -342,6 +372,43 @@ class AccountService
                 'reconciliations_reversed' => $reconciliationsReversed,
             ];
         });
+    }
+
+    /**
+     * Quando a conta a pagar da fatura é quitada (ou reaberta), propaga o status às compras.
+     */
+    public function syncCardInvoicePaymentState(FinancialAccount $account): void
+    {
+        if (! $account->is_card_invoice_payable) {
+            return;
+        }
+
+        $invoice = CreditCardInvoice::query()
+            ->where('financial_account_id', $account->getKey())
+            ->first();
+
+        if ($invoice === null) {
+            return;
+        }
+
+        $account->unsetRelation('settlements');
+        unset($account->settlements_sum_value);
+        $account->loadSum('settlements', 'value');
+
+        if ($account->status === AccountStatus::Settled) {
+            $settledAt = $account->paid_date?->toDateString()
+                ?? $account->settlements()->max('settled_at')
+                ?? now()->toDateString();
+            $userId = $account->settlements()->orderByDesc('id')->value('user_id');
+
+            $this->creditCards->settleInvoicePurchases($invoice, $settledAt, $userId);
+            $this->creditCards->markInvoicePaid($invoice);
+
+            return;
+        }
+
+        $this->creditCards->unsettleInvoicePurchases($invoice);
+        $this->creditCards->markInvoiceClosed($invoice);
     }
 
     public function cancel(FinancialAccount $account): FinancialAccount
@@ -358,7 +425,7 @@ class AccountService
             return;
         }
 
-        $settled = $account->settled_amount;
+        $settled = round((float) $account->settlements()->sum('value'), 2);
 
         $status = match (true) {
             $settled <= 0 => AccountStatus::Open,

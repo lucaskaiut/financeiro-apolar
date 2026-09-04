@@ -46,6 +46,7 @@ class AccountController extends ApiController
                 'status',
                 'overdue',
                 'bank_account_id',
+                'credit_card_id',
                 'category_id',
                 'due_from',
                 'due_to',
@@ -176,7 +177,11 @@ class AccountController extends ApiController
             throw ValidationException::withMessages(['account' => ['Contas canceladas não podem ser baixadas.']]);
         }
 
-        $settlement = $this->service->settle($account, $request->user(), $request->validated());
+        try {
+            $settlement = $this->service->settle($account, $request->user(), $request->validated());
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['account' => [$e->getMessage()]]);
+        }
 
         $this->audit->recordEntity(
             $request->user(),

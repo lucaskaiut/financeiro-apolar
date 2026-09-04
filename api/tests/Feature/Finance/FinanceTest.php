@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Report\Services\ReportService;
 use Carbon\Carbon;
@@ -99,6 +100,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 1200,
             'due_date' => '2026-01-10',
+            'purchase_date' => '2026-01-10',
             'installments' => ['quantity' => 12, 'interval' => 'monthly'],
         ])->assertCreated();
 
@@ -113,6 +115,31 @@ class FinanceTest extends TestCase
 
         $group = $accounts->first()->installment_group_id;
         $this->assertTrue($accounts->every(fn ($a) => $a->installment_group_id === $group));
+    }
+
+    public function test_account_due_date_ignores_timezone_offset(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $response = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Teste fuso',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 100,
+            'due_date' => '2026-09-04T00:00:00.000Z',
+            'purchase_date' => '2026-09-04T00:00:00.000Z',
+            'installments' => ['quantity' => 3, 'interval' => 'monthly'],
+        ])->assertCreated();
+
+        $this->assertSame(
+            ['2026-09-04', '2026-10-04', '2026-11-04'],
+            collect($response->json('data'))->pluck('due_date')->all(),
+        );
     }
 
     public function test_account_settle_partial_and_full(): void
@@ -130,6 +157,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-02-01',
+            'purchase_date' => '2026-02-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 400, 'settled_at' => '2026-02-01'])
@@ -167,6 +195,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-02-01',
+            'purchase_date' => '2026-02-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 1000, 'settled_at' => '2026-02-01'])
@@ -197,6 +226,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 100,
             'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
         ])->json('data.0.id');
 
         $accountB = $this->postJson('/api/accounts', [
@@ -206,6 +236,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 200,
             'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountA}/settle", ['value' => 100, 'settled_at' => '2026-03-05'])->assertOk();
@@ -237,6 +268,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 150,
             'due_date' => now()->subDays(5)->toDateString(),
+            'purchase_date' => now()->subDays(5)->toDateString(),
         ])->json('data.0.id');
 
         $this->postJson('/api/accounts', [
@@ -246,6 +278,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 250,
             'due_date' => now()->addDays(5)->toDateString(),
+            'purchase_date' => now()->addDays(5)->toDateString(),
         ])->assertCreated();
 
         $this->getJson('/api/accounts?overdue=1')
@@ -269,6 +302,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 100,
             'due_date' => '2026-05-01',
+            'purchase_date' => '2026-05-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 100, 'settled_at' => '2026-05-10'])->assertOk();
@@ -300,6 +334,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-06-01',
+            'purchase_date' => '2026-06-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 400, 'settled_at' => '2026-06-01'])->assertOk();
@@ -330,6 +365,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-07-01',
+            'purchase_date' => '2026-07-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 500, 'settled_at' => '2026-07-05'])->assertOk();
@@ -368,6 +404,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 500])->assertOk();
@@ -390,6 +427,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 500, 'settled_at' => '2026-03-05'])->assertOk();
@@ -478,6 +516,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 800,
             'due_date' => '2026-04-01',
+            'purchase_date' => '2026-04-01',
         ])->json('data.0.id');
 
         $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 800, 'settled_at' => '2026-04-01'])->assertOk();
@@ -519,6 +558,7 @@ class FinanceTest extends TestCase
             'category_id' => $categoryId,
             'value' => 200,
             'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
         ])->assertCreated();
 
         $ofx = <<<OFX
@@ -571,6 +611,247 @@ OFX;
         $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->assertJsonPath('meta.total', 1);
     }
 
+    public function test_reconciliation_one_transaction_to_many_accounts_and_undo(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $firstId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Fornecedor A',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 300,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $secondId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Fornecedor B',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 700,
+            'due_date' => '2026-08-12',
+            'purchase_date' => '2026-08-12',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815</DTPOSTED>
+            <TRNAMT>-1000.00</TRNAMT>
+            <FITID>FIT-MANY-001</FITID>
+            <MEMO>PAGAMENTO AGRUPADO</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk()->assertJsonPath('data.imported', 1);
+
+        $transactionId = $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->json('data.0.id');
+
+        $candidates = $this->getJson("/api/reconciliation/transactions/{$transactionId}/candidates?exact=0")
+            ->assertOk()
+            ->json('data.candidates');
+
+        $this->assertCount(2, $candidates);
+
+        $this->postJson('/api/reconciliation/reconcile-many', [
+            'transactions' => [$transactionId],
+            'accounts' => [$firstId, $secondId],
+        ])->assertOk();
+
+        $this->getJson('/api/accounts/'.$firstId)->assertOk()->assertJsonPath('data.status', 'settled');
+        $this->getJson('/api/accounts/'.$secondId)->assertOk()->assertJsonPath('data.status', 'settled');
+
+        $matched = $this->getJson('/api/reconciliation/transactions?status=matched')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->json('data.0');
+
+        $this->assertCount(2, $matched['matched_accounts']);
+
+        $this->postJson("/api/reconciliation/transactions/{$transactionId}/undo")->assertOk();
+
+        $this->getJson('/api/accounts/'.$firstId)->assertOk()->assertJsonPath('data.status', 'open');
+        $this->getJson('/api/accounts/'.$secondId)->assertOk()->assertJsonPath('data.status', 'open');
+        $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_reconciliation_updates_account_bank_when_different(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $statementBankId = $this->createBankAccount();
+        $otherBankId = $this->postJson('/api/bank-accounts', [
+            'name' => 'Banco Secundário',
+            'bank' => 'Itaú',
+            'agency' => '0002',
+            'account' => '99999-0',
+            'type' => 'checking',
+            'initial_balance' => 500,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $categoryId = $this->createCategory('expense');
+
+        $accountId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Conta em outro banco',
+            'bank_account_id' => $otherBankId,
+            'category_id' => $categoryId,
+            'value' => 150,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260810</DTPOSTED>
+            <TRNAMT>-150.00</TRNAMT>
+            <FITID>FIT-BANK-CHANGE</FITID>
+            <MEMO>PAGAMENTO</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $statementBankId,
+            'content' => $ofx,
+        ])->assertOk();
+
+        $transactionId = $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->json('data.0.id');
+
+        $candidates = $this->getJson("/api/reconciliation/transactions/{$transactionId}/candidates?exact=0")
+            ->assertOk()
+            ->json('data.candidates');
+
+        $this->assertTrue(collect($candidates)->contains(fn (array $item) => $item['id'] === $accountId));
+
+        $this->postJson('/api/reconciliation/reconcile-many', [
+            'transactions' => [$transactionId],
+            'accounts' => [$accountId],
+        ])->assertOk();
+
+        $this->getJson('/api/accounts/'.$accountId)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'settled')
+            ->assertJsonPath('data.bank_account_id', $statementBankId);
+    }
+
+    public function test_reconciliation_create_account_with_selected_accounts_settles_all(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $firstId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Parcela 1',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 200,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $secondId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Parcela 2',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 300,
+            'due_date' => '2026-08-11',
+            'purchase_date' => '2026-08-11',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815</DTPOSTED>
+            <TRNAMT>-1000.00</TRNAMT>
+            <FITID>FIT-CREATE-MANY</FITID>
+            <MEMO>PAGAMENTO TOTAL</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk();
+
+        $transactionId = $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->json('data.0.id');
+
+        $createdId = $this->postJson("/api/reconciliation/transactions/{$transactionId}/create-account", [
+            'type' => 'payable',
+            'description' => 'Complemento',
+            'category_id' => $categoryId,
+            'bank_account_id' => $bankAccountId,
+            'value' => 500,
+            'due_date' => '2026-08-15',
+            'account_ids' => [$firstId, $secondId],
+        ])->assertCreated()->json('data.id');
+
+        $this->getJson('/api/accounts/'.$firstId)->assertOk()->assertJsonPath('data.status', 'settled');
+        $this->getJson('/api/accounts/'.$secondId)->assertOk()->assertJsonPath('data.status', 'settled');
+        $this->getJson('/api/accounts/'.$createdId)->assertOk()->assertJsonPath('data.status', 'settled');
+        $this->getJson('/api/reconciliation/transactions?status=matched')->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
     public function test_payables_report_treats_unselected_due_today_as_overdue(): void
     {
         Carbon::setTestNow('2026-09-01 10:00:00');
@@ -589,6 +870,7 @@ OFX;
                 'category_id' => $categoryId,
                 'value' => 500,
                 'due_date' => '2026-09-01',
+                'purchase_date' => '2026-09-01',
             ])->json('data.0.id');
 
             $response = $this->getJson('/api/reports/payables')->assertOk();
@@ -650,6 +932,7 @@ OFX;
             'category_id' => $categoryId,
             'value' => 300,
             'due_date' => '2026-09-01',
+            'purchase_date' => '2026-09-01',
         ])->json('data.0.id');
 
         $pdf = UploadedFile::fake()->create('fatura.pdf', 2048, 'application/pdf');
@@ -674,36 +957,6 @@ OFX;
         $this->getJson("/api/accounts/{$accountId}/documents")->assertOk()->assertJsonCount(1, 'data');
     }
 
-    public function test_allocated_expense_splits_between_cost_centers(): void
-    {
-        $tenant = $this->createTenantWithRoles();
-        Sanctum::actingAs($this->createAdmin($tenant));
-
-        $bankAccountId = $this->createBankAccount();
-        $categoryId = $this->createCategory('expense');
-        $obraA = $this->createCostCenter('Obra A');
-        $obraB = $this->createCostCenter('Obra B');
-        $obraC = $this->createCostCenter('Obra C');
-
-        $this->postJson('/api/accounts', [
-            'type' => 'payable',
-            'description' => 'Balaroti',
-            'bank_account_id' => $bankAccountId,
-            'value' => 2500,
-            'due_date' => '2026-09-10',
-            'allocations' => [
-                ['cost_center_id' => $obraA, 'value' => 1000],
-                ['cost_center_id' => $obraB, 'value' => 800],
-                ['cost_center_id' => $obraC, 'value' => 700],
-            ],
-        ])->assertCreated();
-
-        $account = FinancialAccount::query()->with('allocations')->first();
-        $this->assertSame('split', $account->allocation_mode);
-        $this->assertCount(3, $account->allocations);
-        $this->assertEqualsWithDelta(2500, $account->allocations->sum('value'), 0.01);
-    }
-
     public function test_credit_card_invoice_payment_does_not_double_count_expenses(): void
     {
         $tenant = $this->createTenantWithRoles();
@@ -722,20 +975,24 @@ OFX;
             'status' => 'active',
         ])->assertCreated()->json('data.id');
 
-        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
             'description' => 'Compra A',
             'category_id' => $categoryId,
             'cost_center_id' => $obraA,
+            'credit_card_id' => $cardId,
             'value' => 1000,
-            'due_date' => '2026-09-01',
+            'purchase_date' => '2026-09-01',
         ])->assertCreated();
 
-        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
             'description' => 'Compra B',
             'category_id' => $categoryId,
             'cost_center_id' => $obraA,
+            'credit_card_id' => $cardId,
             'value' => 500,
-            'due_date' => '2026-09-02',
+            'purchase_date' => '2026-09-02',
         ])->assertCreated();
 
         $invoice = $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
@@ -746,17 +1003,84 @@ OFX;
 
         $purchases = FinancialAccount::query()->where('is_card_purchase', true)->get();
         $this->assertCount(2, $purchases);
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->status === AccountStatus::Open));
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->credit_card_invoice_id !== null));
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->cost_center_id !== null));
 
         $invoicePayable = FinancialAccount::query()->where('is_card_invoice_payable', true)->first();
         $this->assertNotNull($invoicePayable);
         $this->assertEqualsWithDelta(1500, $invoicePayable->value, 0.01);
+        $this->assertSame(AccountStatus::Open, $invoicePayable->status);
 
         $this->postJson("/api/accounts/{$invoicePayable->uuid}/settle", [
             'value' => 1500,
             'settled_at' => '2026-10-05',
         ])->assertOk();
 
+        $purchases->each->refresh();
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->status === AccountStatus::Settled));
+
         $cashFlow = $this->getJson('/api/cash-flow/realized?from=2026-10-01&to=2026-10-31')->assertOk()->json('data');
         $this->assertEqualsWithDelta(1500, $cashFlow['total_out'], 0.01);
+    }
+
+    public function test_credit_card_purchase_supports_installments(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Visa',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $response = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Notebook',
+            'category_id' => $categoryId,
+            'cost_center_id' => $obraA,
+            'credit_card_id' => $cardId,
+            'value' => 3000,
+            'purchase_date' => '2026-09-04',
+            'installments' => ['quantity' => 3],
+        ])->assertCreated();
+
+        $this->assertCount(3, $response->json('data'));
+        $this->assertTrue(collect($response->json('data'))->every(fn ($row) => $row['is_card_purchase'] === true));
+
+        $purchases = FinancialAccount::query()
+            ->where('is_card_purchase', true)
+            ->orderBy('installment_number')
+            ->get();
+
+        $this->assertCount(3, $purchases);
+        $this->assertEqualsCanonicalizing([1, 2, 3], $purchases->pluck('installment_number')->all());
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->installment_total === 3));
+        $this->assertEqualsWithDelta(3000, $purchases->sum('value'), 0.01);
+        $this->assertSame(['2026-09-04', '2026-09-04', '2026-09-04'], $purchases->map(fn ($a) => $a->purchase_date->toDateString())->all());
+        // Fecha dia 10, vence dia 17 (mesmo mês do fechamento); parcelas avançam só o vencimento
+        $this->assertSame(['2026-09-17', '2026-10-17', '2026-11-17'], $purchases->map(fn ($a) => $a->due_date->toDateString())->all());
+        $this->assertSame('Notebook (1/3)', $purchases[0]->description);
+
+        $september = $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
+            'reference_month' => '2026-09',
+        ])->assertOk()->json('data');
+
+        $this->assertEqualsWithDelta(1000, $september['total_value'], 0.01);
+        $this->assertSame('2026-09-17', $september['due_date']);
+        $this->assertSame(1, FinancialAccount::query()->where('is_card_purchase', true)->whereNotNull('credit_card_invoice_id')->count());
+        $this->assertSame(2, FinancialAccount::query()->where('is_card_purchase', true)->whereNull('credit_card_invoice_id')->count());
+        $this->assertSame(
+            AccountStatus::Open,
+            FinancialAccount::query()->where('is_card_purchase', true)->whereNotNull('credit_card_invoice_id')->value('status'),
+        );
     }
 }

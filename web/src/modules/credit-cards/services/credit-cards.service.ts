@@ -12,18 +12,6 @@ export interface CreditCardPayload {
   status?: string
 }
 
-export interface PurchasePayload {
-  description: string
-  counterparty?: string | null
-  company_id?: string | null
-  cost_center_id?: string | null
-  category_id: string
-  subcategory_id?: string | null
-  value: number
-  due_date: string
-  observation?: string | null
-}
-
 export const creditCardsService = {
   async list(params: ListParams): Promise<PaginatedResponse<CreditCard>> {
     const response = await http.get<PaginatedResponse<CreditCard>>('/credit-cards', { params })
@@ -55,12 +43,6 @@ export const creditCardsService = {
 
   async listInvoices(id: string): Promise<CreditCardInvoice[]> {
     const response = await http.get<ApiResponse<CreditCardInvoice[]>>(`/credit-cards/${id}/invoices`)
-
-    return response.data.data
-  },
-
-  async createPurchase(id: string, payload: PurchasePayload): Promise<{ id: string }> {
-    const response = await http.post<ApiResponse<{ id: string }>>(`/credit-cards/${id}/purchases`, payload)
 
     return response.data.data
   },

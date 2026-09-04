@@ -74,17 +74,31 @@ class CreditCardController extends ApiController
     {
         $this->authorize('update', $creditCard);
 
-        $purchase = $this->service->createPurchase($creditCard, $request->validated());
+        $purchases = $this->service->createPurchase($creditCard, $request->validated());
+        $first = $purchases[0];
+        $count = count($purchases);
 
         $this->audit->recordEntity(
             $request->user(),
             AuditAction::FinancialCreate,
             'credit_card_purchase',
-            $purchase->uuid,
-            ['description' => $purchase->description, 'value' => (float) $purchase->value],
+            $first->uuid,
+            [
+                'description' => $first->description,
+                'value' => (float) $first->value,
+                'installments' => $count,
+            ],
         );
 
-        return $this->created(['id' => $purchase->uuid], 'Compra registrada com sucesso.');
+        $message = $count > 1
+            ? "Compra parcelada em {$count} vezes registrada com sucesso."
+            : 'Compra registrada com sucesso.';
+
+        return $this->created([
+            'id' => $first->uuid,
+            'ids' => array_map(fn ($purchase) => $purchase->uuid, $purchases),
+            'count' => $count,
+        ], $message);
     }
 
     public function closeInvoice(CloseCreditCardInvoiceRequest $request, CreditCard $creditCard): JsonResponse
@@ -102,6 +116,19 @@ class CreditCardController extends ApiController
 
         $invoices = CreditCardInvoice::query()
             ->where('credit_card_id', $creditCard->uuid)
+            ->with([
+                'payable:id,uuid',
+                'purchases' => fn ($q) => $q
+                    ->with([
+                        'costCenter:id,uuid,name',
+                        'category:id,uuid,name,color,type',
+                        'subcategory:id,uuid,name',
+                        'company:id,uuid,name',
+                    ])
+                    ->withSum('settlements', 'value')
+                    ->orderBy('purchase_date')
+                    ->orderBy('id'),
+            ])
             ->withCount('purchases')
             ->orderByDesc('reference_month')
             ->get();
