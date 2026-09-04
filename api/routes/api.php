@@ -7,9 +7,12 @@ use App\Modules\Assistant\Http\Controllers\ChatController;
 use App\Modules\Assistant\Http\Controllers\ConversationController;
 use App\Modules\Audit\Http\Controllers\AuditLogController;
 use App\Modules\Auth\Http\Controllers\AuthController;
+use App\Modules\BankAccount\Http\Controllers\BankAccountController;
 use App\Modules\CashFlow\Http\Controllers\CashFlowController;
 use App\Modules\Category\Http\Controllers\CategoryController;
+use App\Modules\Company\Http\Controllers\CompanyController;
 use App\Modules\CostCenter\Http\Controllers\CostCenterController;
+use App\Modules\CreditCard\Http\Controllers\CreditCardController;
 use App\Modules\Dashboard\Http\Controllers\DashboardController;
 use App\Modules\Reconciliation\Http\Controllers\ReconciliationController;
 use App\Modules\Recurrence\Http\Controllers\RecurrenceController;
@@ -48,24 +51,41 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
 
     Route::post('uploads', FileUploadController::class);
 
-    // Dashboard financeiro
     Route::get('dashboard', [DashboardController::class, 'summary']);
 
-    // Centros de custo (contas bancárias)
+    Route::get('bank-accounts', [BankAccountController::class, 'index'])->middleware('permission:bank_accounts.view');
+    Route::post('bank-accounts', [BankAccountController::class, 'store'])->middleware('permission:bank_accounts.create');
+    Route::get('bank-accounts/{bank_account}', [BankAccountController::class, 'show'])->middleware('permission:bank_accounts.view');
+    Route::match(['put', 'patch'], 'bank-accounts/{bank_account}', [BankAccountController::class, 'update'])->middleware('permission:bank_accounts.update');
+    Route::delete('bank-accounts/{bank_account}', [BankAccountController::class, 'destroy'])->middleware('permission:bank_accounts.delete');
+
     Route::get('cost-centers', [CostCenterController::class, 'index'])->middleware('permission:cost_centers.view');
     Route::post('cost-centers', [CostCenterController::class, 'store'])->middleware('permission:cost_centers.create');
     Route::get('cost-centers/{cost_center}', [CostCenterController::class, 'show'])->middleware('permission:cost_centers.view');
     Route::match(['put', 'patch'], 'cost-centers/{cost_center}', [CostCenterController::class, 'update'])->middleware('permission:cost_centers.update');
     Route::delete('cost-centers/{cost_center}', [CostCenterController::class, 'destroy'])->middleware('permission:cost_centers.delete');
 
-    // Categorias financeiras
+    Route::get('companies', [CompanyController::class, 'index'])->middleware('permission:companies.view');
+    Route::post('companies', [CompanyController::class, 'store'])->middleware('permission:companies.create');
+    Route::get('companies/{company}', [CompanyController::class, 'show'])->middleware('permission:companies.view');
+    Route::match(['put', 'patch'], 'companies/{company}', [CompanyController::class, 'update'])->middleware('permission:companies.update');
+    Route::delete('companies/{company}', [CompanyController::class, 'destroy'])->middleware('permission:companies.delete');
+
+    Route::get('credit-cards', [CreditCardController::class, 'index'])->middleware('permission:credit_cards.view');
+    Route::post('credit-cards', [CreditCardController::class, 'store'])->middleware('permission:credit_cards.create');
+    Route::get('credit-cards/{credit_card}', [CreditCardController::class, 'show'])->middleware('permission:credit_cards.view');
+    Route::match(['put', 'patch'], 'credit-cards/{credit_card}', [CreditCardController::class, 'update'])->middleware('permission:credit_cards.update');
+    Route::delete('credit-cards/{credit_card}', [CreditCardController::class, 'destroy'])->middleware('permission:credit_cards.delete');
+    Route::post('credit-cards/{credit_card}/purchases', [CreditCardController::class, 'storePurchase'])->middleware('permission:credit_cards.update');
+    Route::post('credit-cards/{credit_card}/invoices/close', [CreditCardController::class, 'closeInvoice'])->middleware('permission:credit_cards.update');
+    Route::get('credit-cards/{credit_card}/invoices', [CreditCardController::class, 'invoices'])->middleware('permission:credit_cards.view');
+
     Route::get('categories', [CategoryController::class, 'index'])->middleware('permission:categories.view');
     Route::post('categories', [CategoryController::class, 'store'])->middleware('permission:categories.create');
     Route::get('categories/{category}', [CategoryController::class, 'show'])->middleware('permission:categories.view');
     Route::match(['put', 'patch'], 'categories/{category}', [CategoryController::class, 'update'])->middleware('permission:categories.update');
     Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->middleware('permission:categories.delete');
 
-    // Contas a pagar / receber
     Route::get('accounts', [AccountController::class, 'index'])->middleware('permission:accounts.view');
     Route::post('accounts', [AccountController::class, 'store'])->middleware('permission:accounts.create');
     Route::post('accounts/import', [AccountController::class, 'import'])->middleware('permission:accounts.create');
@@ -81,23 +101,19 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::get('accounts/{account}/documents/{document}/download', [AccountController::class, 'downloadDocument'])->middleware('permission:accounts.view');
     Route::delete('accounts/{account}/documents/{document}', [AccountController::class, 'destroyDocument'])->middleware('permission:accounts.update');
 
-    // Recorrências
     Route::get('recurrences', [RecurrenceController::class, 'index'])->middleware('permission:recurrences.view');
     Route::post('recurrences', [RecurrenceController::class, 'store'])->middleware('permission:recurrences.create');
     Route::get('recurrences/{recurrence}', [RecurrenceController::class, 'show'])->middleware('permission:recurrences.view');
     Route::match(['put', 'patch'], 'recurrences/{recurrence}', [RecurrenceController::class, 'update'])->middleware('permission:recurrences.update');
     Route::delete('recurrences/{recurrence}', [RecurrenceController::class, 'destroy'])->middleware('permission:recurrences.delete');
 
-    // Transferências entre contas
     Route::get('transfers', [TransferController::class, 'index'])->middleware('permission:transfers.view');
     Route::post('transfers', [TransferController::class, 'store'])->middleware('permission:transfers.create');
     Route::delete('transfers/{transfer}', [TransferController::class, 'destroy'])->middleware('permission:transfers.delete');
 
-    // Fluxo de caixa
     Route::get('cash-flow/realized', [CashFlowController::class, 'realized'])->middleware('permission:cash_flow.view');
     Route::get('cash-flow/projected', [CashFlowController::class, 'projected'])->middleware('permission:cash_flow.view');
 
-    // Conciliação bancária
     Route::get('reconciliation/transactions', [ReconciliationController::class, 'index'])->middleware('permission:reconciliation.view');
     Route::post('reconciliation/import', [ReconciliationController::class, 'import'])->middleware('permission:reconciliation.execute');
     Route::post('reconciliation/auto', [ReconciliationController::class, 'autoReconcile'])->middleware('permission:reconciliation.execute');
@@ -108,7 +124,6 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::post('reconciliation/transactions/{transaction}/create-account', [ReconciliationController::class, 'createAccount'])->middleware('permission:reconciliation.execute');
     Route::post('reconciliation/transactions/{transaction}/undo', [ReconciliationController::class, 'undo'])->middleware('permission:reconciliation.undo');
 
-    // Relatórios
     Route::get('reports/daily', [ReportController::class, 'daily'])->middleware('permission:reports.view');
     Route::get('reports/daily/export', [ReportController::class, 'dailyExport'])->middleware('permission:reports.export');
     Route::get('reports/weekly', [ReportController::class, 'weekly'])->middleware('permission:reports.view');
@@ -126,10 +141,8 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::get('reports/payables', [ReportController::class, 'payables'])->middleware('permission:reports.view');
     Route::get('reports/payables/export', [ReportController::class, 'payablesExport'])->middleware('permission:reports.export');
 
-    // Auditoria
     Route::get('audit', [AuditLogController::class, 'index'])->middleware('permission:audit.view');
 
-    // Assistente financeiro com IA
     Route::get('assistant/suggestions', [ConversationController::class, 'suggestions'])->middleware('permission:assistant.view');
     Route::get('assistant/conversations', [ConversationController::class, 'index'])->middleware('permission:assistant.view');
     Route::post('assistant/conversations', [ConversationController::class, 'store'])->middleware('permission:assistant.view');

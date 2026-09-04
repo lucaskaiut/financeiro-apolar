@@ -23,7 +23,7 @@ import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { useDebounce } from '@/shared/hooks/useDebounce'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { cn } from '@/shared/utils/cn'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
 import type { Account } from '@/shared/types/models'
@@ -72,7 +72,7 @@ export default function AccountsListPage() {
   const type = searchParams.get('type') ?? ''
   const status = searchParams.get('status') ?? ''
   const overdue = searchParams.get('overdue') === '1'
-  const costCenterId = searchParams.get('cost_center_id') ?? ''
+  const bankAccountId = searchParams.get('bank_account_id') ?? ''
 
   useEffect(() => {
     setDueFrom(searchParams.get('due_from') ?? '')
@@ -83,7 +83,7 @@ export default function AccountsListPage() {
 
   const navigate = useNavigate()
   const { can } = usePermissions()
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
 
   const [toDelete, setToDelete] = useState<Account | null>(null)
   const [toCancel, setToCancel] = useState<Account | null>(null)
@@ -101,7 +101,7 @@ export default function AccountsListPage() {
     type: type || undefined,
     status: overdue ? undefined : status || undefined,
     overdue: overdue || undefined,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
     due_from: dueFrom || undefined,
     due_to: dueTo || undefined,
     paid_from: paidFrom || undefined,
@@ -114,7 +114,7 @@ export default function AccountsListPage() {
     type?: string
     status?: string
     overdue?: string
-    cost_center_id?: string
+    bank_account_id?: string
     due_from?: string
     due_to?: string
     paid_from?: string
@@ -139,8 +139,8 @@ export default function AccountsListPage() {
         }
         params.delete('page')
       }
-      if (next.cost_center_id !== undefined) {
-        next.cost_center_id ? params.set('cost_center_id', next.cost_center_id) : params.delete('cost_center_id')
+      if (next.bank_account_id !== undefined) {
+        next.bank_account_id ? params.set('bank_account_id', next.bank_account_id) : params.delete('bank_account_id')
         params.delete('page')
       }
       if (next.due_from !== undefined) {
@@ -184,7 +184,7 @@ export default function AccountsListPage() {
               </Badge>
             )}
           </div>
-          <p className="truncate text-[13px] text-muted">{a.counterparty ?? a.cost_center ?? '—'}</p>
+          <p className="truncate text-[13px] text-muted">{a.counterparty ?? a.bank_account ?? '—'}</p>
         </div>
       ),
     },
@@ -340,27 +340,27 @@ export default function AccountsListPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[13px] text-muted">Centro de custo:</span>
+            <span className="mr-1 text-[13px] text-muted">Conta bancária:</span>
             <button
               type="button"
-              onClick={() => updateParams({ cost_center_id: '' })}
+              onClick={() => updateParams({ bank_account_id: '' })}
               className={cn(
                 'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-                costCenterId === ''
+                bankAccountId === ''
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-surface-2 text-muted hover:bg-surface-3 hover:text-foreground',
               )}
             >
               Todos
             </button>
-            {(costCenters.data ?? []).map((option) => (
+            {(bankAccounts.data ?? []).map((option) => (
               <button
                 key={option.value}
                 type="button"
-                onClick={() => updateParams({ cost_center_id: option.value })}
+                onClick={() => updateParams({ bank_account_id: option.value })}
                 className={cn(
                   'rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors',
-                  costCenterId === option.value
+                  bankAccountId === option.value
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-surface-2 text-muted hover:bg-surface-3 hover:text-foreground',
                 )}

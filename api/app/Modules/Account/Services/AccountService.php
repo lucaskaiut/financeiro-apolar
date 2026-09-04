@@ -16,13 +16,25 @@ use InvalidArgumentException;
 
 class AccountService
 {
+    public function __construct(
+        private readonly AllocationService $allocations,
+    ) {}
+
     /**
-     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, cost_center_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
+     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, bank_account_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
      */
     public function paginate(int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
         $query = FinancialAccount::query()
-            ->with(['costCenter:id,uuid,name', 'category:id,uuid,name,color,type', 'subcategory:id,uuid,name'])
+            ->with([
+                'bankAccount:id,uuid,name',
+                'company:id,uuid,name',
+                'costCenter:id,uuid,name',
+                'category:id,uuid,name,color,type',
+                'subcategory:id,uuid,name',
+                'allocations.costCenter:id,uuid,name',
+                'allocations.company:id,uuid,name',
+            ])
             ->withSum('settlements', 'value');
 
         $overdue = filter_var($filters['overdue'] ?? false, FILTER_VALIDATE_BOOLEAN);
@@ -36,7 +48,21 @@ class AccountService
             $query->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']));
         }
 
-        $query->when(filled($filters['cost_center_id'] ?? null), fn ($q) => $q->where('cost_center_id', $filters['cost_center_id']));
+        $query->when(filled($filters['bank_account_id'] ?? null), fn ($q) => $q->where('bank_account_id', $filters['bank_account_id']));
+        $query->when(filled($filters['cost_center_id'] ?? null), function ($q) use ($filters): void {
+            $costCenterId = $filters['cost_center_id'];
+            $q->where(function ($inner) use ($costCenterId): void {
+                $inner->where('cost_center_id', $costCenterId)
+                    ->orWhereHas('allocations', fn ($a) => $a->where('cost_center_id', $costCenterId));
+            });
+        });
+        $query->when(filled($filters['company_id'] ?? null), function ($q) use ($filters): void {
+            $companyId = $filters['company_id'];
+            $q->where(function ($inner) use ($companyId): void {
+                $inner->where('company_id', $companyId)
+                    ->orWhereHas('allocations', fn ($a) => $a->where('company_id', $companyId));
+            });
+        });
         $query->when(filled($filters['category_id'] ?? null), fn ($q) => $q->where('category_id', $filters['category_id']));
         $query->when(filled($filters['installment_group_id'] ?? null), fn ($q) => $q->where('installment_group_id', $filters['installment_group_id']));
         $query->when(filled($filters['due_from'] ?? null), fn ($q) => $q->whereDate('due_date', '>=', $filters['due_from']));
@@ -62,26 +88,64 @@ class AccountService
     public function find(string $uuid): FinancialAccount
     {
         return FinancialAccount::query()
-            ->with(['costCenter:id,uuid,name', 'category:id,uuid,name,color,type', 'subcategory:id,uuid,name', 'settlements' => fn ($q) => $q->orderBy('settled_at')])
+            ->with([
+                'bankAccount:id,uuid,name',
+                'company:id,uuid,name',
+                'costCenter:id,uuid,name',
+                'category:id,uuid,name,color,type',
+                'subcategory:id,uuid,name',
+                'allocations.costCenter:id,uuid,name',
+                'allocations.company:id,uuid,name',
+                'settlements' => fn ($q) => $q->orderBy('settled_at'),
+            ])
             ->withSum('settlements', 'value')
             ->where('uuid', $uuid)
             ->firstOrFail();
     }
 
     /**
-     * @param  array{type: string, description: string, counterparty?: ?string, cost_center_id: string, category_id: string, value: numeric, due_date: string, expected_date?: ?string, observation?: ?string, installments?: ?array{quantity: int, interval?: string}}  $data
+     * @param  array<string, mixed>  $data
      * @return list<FinancialAccount>
      */
     public function create(array $data): array
     {
         $installments = $data['installments'] ?? null;
-        unset($data['installments']);
+        $rawAllocations = $data['allocations'] ?? null;
+        unset($data['installments'], $data['allocations']);
+
+        if (! empty($rawAllocations)) {
+            $data['allocations'] = $this->allocations->normalize((float) $data['value'], $rawAllocations);
+            $data['allocation_mode'] = 'split';
+        }
+
+        if (! empty($data['credit_card_id'])) {
+            $data['is_card_purchase'] = true;
+        }
 
         if ($installments === null || (int) ($installments['quantity'] ?? 1) <= 1) {
-            return [FinancialAccount::query()->create($data)];
+            return [$this->persistAccount($data)];
         }
 
         return $this->createInstallments($data, (int) $installments['quantity'], $installments['interval'] ?? 'monthly');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function persistAccount(array $data): FinancialAccount
+    {
+        $allocations = $data['allocations'] ?? null;
+        unset($data['allocations']);
+
+        return DB::transaction(function () use ($data, $allocations): FinancialAccount {
+            $account = FinancialAccount::query()->create($data);
+
+            if (is_array($allocations) && $allocations !== []) {
+                $this->allocations->sync($account, $allocations);
+            }
+
+            return $account->refresh()->load(['bankAccount', 'company', 'costCenter', 'allocations']);
+        });
     }
 
     /**
@@ -113,7 +177,7 @@ class AccountService
                 ? $firstDueDate->copy()
                 : $this->nextDueDate($firstDueDate, $interval, $i - 1);
 
-            $accounts[] = FinancialAccount::query()->create([
+            $accounts[] = $this->persistAccount([
                 ...$data,
                 'value' => $value,
                 'due_date' => $dueDate->toDateString(),
@@ -142,6 +206,9 @@ class AccountService
     {
         $hasSettlements = $account->settlements()->exists();
 
+        $rawAllocations = $data['allocations'] ?? null;
+        unset($data['allocations']);
+
         $paidDateProvided = array_key_exists('paid_date', $data);
         $paidDate = $data['paid_date'] ?? null;
         unset($data['paid_date']);
@@ -150,6 +217,11 @@ class AccountService
 
         $account->fill($data);
         $account->save();
+
+        if (is_array($rawAllocations)) {
+            $normalized = $this->allocations->normalize((float) $account->value, $rawAllocations);
+            $this->allocations->sync($account, $normalized);
+        }
 
         if ($hasSettlements && $valueChanged) {
             $this->syncSettlementValues($account);

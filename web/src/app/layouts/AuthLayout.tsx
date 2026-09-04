@@ -15,7 +15,7 @@ export function AuthLayout() {
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-raised">
             <Zap className="size-5.5" aria-hidden="true" />
           </span>
-          <span className="text-lg font-semibold tracking-tight text-foreground">Nox</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">Apolar</span>
         </div>
 
         <Suspense fallback={<Loading />}>
@@ -23,7 +23,7 @@ export function AuthLayout() {
         </Suspense>
 
         <p className="mt-8 text-xs text-subtle">
-          © {new Date().getFullYear()} Nox — Painel administrativo
+          © {new Date().getFullYear()} Apolar — Painel administrativo
         </p>
       </div>
     </div>

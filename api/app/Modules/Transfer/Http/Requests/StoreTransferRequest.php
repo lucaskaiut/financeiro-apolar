@@ -19,16 +19,16 @@ class StoreTransferRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'from_cost_center_id' => [
+            'from_bank_account_id' => [
                 'required',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
-            'to_cost_center_id' => [
+            'to_bank_account_id' => [
                 'required',
                 'string',
-                'different:from_cost_center_id',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                'different:from_bank_account_id',
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'value' => ['required', 'numeric', 'gt:0'],
             'date' => ['required', 'date'],

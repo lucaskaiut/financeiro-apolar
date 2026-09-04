@@ -9,7 +9,7 @@ class AccountImport extends Model
     protected $fillable = [
         'tenant_id',
         'user_id',
-        'cost_center_id',
+        'bank_account_id',
         'filename',
         'content',
     ];

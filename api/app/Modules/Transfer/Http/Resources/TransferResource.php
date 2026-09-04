@@ -18,10 +18,10 @@ class TransferResource extends JsonResource
     {
         return [
             'id' => $this->uuid,
-            'from_cost_center_id' => $this->fromCostCenter?->uuid,
-            'from_cost_center' => $this->whenLoaded('fromCostCenter', fn () => $this->fromCostCenter?->name),
-            'to_cost_center_id' => $this->toCostCenter?->uuid,
-            'to_cost_center' => $this->whenLoaded('toCostCenter', fn () => $this->toCostCenter?->name),
+            'from_bank_account_id' => $this->fromCostCenter?->uuid,
+            'from_bank_account' => $this->whenLoaded('fromCostCenter', fn () => $this->fromCostCenter?->name),
+            'to_bank_account_id' => $this->toCostCenter?->uuid,
+            'to_bank_account' => $this->whenLoaded('toCostCenter', fn () => $this->toCostCenter?->name),
             'value' => (float) $this->value,
             'date' => $this->date?->toDateString(),
             'description' => $this->description,

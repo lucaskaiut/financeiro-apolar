@@ -17,7 +17,7 @@ import {
 } from '@/shared/design-system'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
 import { addDays, toIsoDate } from '@/shared/utils/date'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useProjectedCashFlow } from '../hooks/useCashFlow'
 import type { ProjectedItem } from '../services/cash-flow.service'
 
@@ -27,14 +27,14 @@ const defaultTo = toIsoDate(addDays(new Date(), 30))
 export default function CashFlowProjectedPage() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(defaultTo)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setCostCenterId] = useState('')
 
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
 
   const query = useProjectedCashFlow({
     from,
     to,
-    ...(costCenterId ? { cost_center_id: costCenterId } : {}),
+    ...(bankAccountId ? { bank_account_id: bankAccountId } : {}),
   })
 
   const columns: Array<Column<ProjectedItem>> = [
@@ -49,7 +49,7 @@ export default function CashFlowProjectedPage() {
       render: (i) => (
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground">{i.description}</p>
-          <p className="truncate text-[13px] text-muted">{i.cost_center ?? '—'}</p>
+          <p className="truncate text-[13px] text-muted">{i.bank_account ?? '—'}</p>
         </div>
       ),
     },
@@ -89,11 +89,11 @@ export default function CashFlowProjectedPage() {
               }}
             />
             <Select
-              aria-label="Centro de custo"
+              aria-label="Conta bancária"
               className="w-52"
-              value={costCenterId}
+              value={bankAccountId}
               onChange={(e) => setCostCenterId(e.target.value)}
-              options={[{ value: '', label: 'Todos os centros' }, ...(costCenters.data ?? [])]}
+              options={[{ value: '', label: 'Todos os centros' }, ...(bankAccounts.data ?? [])]}
             />
           </div>
         </FilterBar>

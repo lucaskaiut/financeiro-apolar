@@ -34,9 +34,9 @@ export interface CategoryTotal {
   total: number
 }
 
-export interface CostCenterBalance {
-  cost_center_id: string
-  cost_center: string
+export interface BankAccountBalance {
+  bank_account_id: string
+  bank_account: string
   initial_balance: number
   income: number
   expense: number
@@ -48,7 +48,7 @@ export interface DashboardAccount {
   description: string
   counterparty: string | null
   type: 'payable' | 'receivable'
-  cost_center: string | null
+  bank_account: string | null
   category: string | null
   value: number
   remaining_amount: number
@@ -56,14 +56,14 @@ export interface DashboardAccount {
 }
 
 export interface DashboardSummary {
-  cost_centers: Array<{ id: string; name: string }>
-  selected_cost_center_id: string | null
+  bank_accounts: Array<{ id: string; name: string }>
+  selected_bank_account_id: string | null
   kpis: DashboardKpis
   cash_flow_series: CashFlowMonth[]
   projected_series: ProjectedDay[]
   expense_by_category: CategoryTotal[]
   income_by_category: CategoryTotal[]
-  balance_by_cost_center: CostCenterBalance[]
+  balance_by_bank_account: BankAccountBalance[]
   overdue: DashboardAccount[]
   upcoming: DashboardAccount[]
   payables_next_7d: DashboardAccount[]
@@ -71,9 +71,9 @@ export interface DashboardSummary {
 }
 
 export const dashboardService = {
-  async summary(cost_center_id?: string): Promise<DashboardSummary> {
+  async summary(bank_account_id?: string): Promise<DashboardSummary> {
     const response = await http.get<ApiResponse<DashboardSummary>>('/dashboard', {
-      params: cost_center_id ? { cost_center_id } : undefined,
+      params: bank_account_id ? { bank_account_id } : undefined,
     })
 
     return response.data.data

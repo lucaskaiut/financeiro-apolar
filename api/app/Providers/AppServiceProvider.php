@@ -6,6 +6,14 @@ use App\Modules\ACL\Models\Role;
 use App\Modules\ACL\Policies\RolePolicy;
 use App\Modules\Assistant\Models\Conversation;
 use App\Modules\Assistant\Policies\ConversationPolicy;
+use App\Modules\BankAccount\Models\BankAccount;
+use App\Modules\BankAccount\Policies\BankAccountPolicy;
+use App\Modules\Company\Models\Company;
+use App\Modules\Company\Policies\CompanyPolicy;
+use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\CostCenter\Policies\CostCenterPolicy;
+use App\Modules\CreditCard\Models\CreditCard;
+use App\Modules\CreditCard\Policies\CreditCardPolicy;
 use App\Modules\Tenant\Models\Tenant;
 use App\Modules\Tenant\Policies\TenantPolicy;
 use App\Modules\User\Models\User;
@@ -53,5 +61,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Tenant::class, TenantPolicy::class);
         Gate::policy(Role::class, RolePolicy::class);
         Gate::policy(Conversation::class, ConversationPolicy::class);
+        Gate::policy(BankAccount::class, BankAccountPolicy::class);
+        Gate::policy(CostCenter::class, CostCenterPolicy::class);
+        Gate::policy(Company::class, CompanyPolicy::class);
+        Gate::policy(CreditCard::class, CreditCardPolicy::class);
     }
 }

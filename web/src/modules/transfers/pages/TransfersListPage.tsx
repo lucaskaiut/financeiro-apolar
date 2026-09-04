@@ -41,12 +41,12 @@ export default function TransfersListPage() {
     {
       key: 'from',
       header: 'De',
-      render: (t) => <span className="font-medium text-foreground">{t.from_cost_center ?? '—'}</span>,
+      render: (t) => <span className="font-medium text-foreground">{t.from_bank_account ?? '—'}</span>,
     },
     {
       key: 'to',
       header: 'Para',
-      render: (t) => <span className="font-medium text-foreground">{t.to_cost_center ?? '—'}</span>,
+      render: (t) => <span className="font-medium text-foreground">{t.to_bank_account ?? '—'}</span>,
     },
     {
       key: 'value',
@@ -78,7 +78,7 @@ export default function TransfersListPage() {
     <Page>
       <PageHeader
         title="Transferências"
-        description="Movimente valores entre centros de custo."
+        description="Movimente valores entre contas bancárias."
         breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Transferências' }]}
         actions={
           <Can permission={Permission.TRANSFERS_CREATE}>

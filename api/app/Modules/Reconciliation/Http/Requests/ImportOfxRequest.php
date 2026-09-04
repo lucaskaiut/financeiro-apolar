@@ -19,10 +19,10 @@ class ImportOfxRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'cost_center_id' => [
+            'bank_account_id' => [
                 'required',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'content' => ['required', 'string', 'min:1'],
         ];

@@ -45,7 +45,7 @@ export function buildCategoryMatrixHtml(
 
   for (const group of matrix.groups) {
     sections.push(
-      `<tr class="section-banner"><td colspan="${headers.length}">${escapeHtml(group.cost_center)}</td></tr>`,
+      `<tr class="section-banner"><td colspan="${headers.length}">${escapeHtml(group.bank_account)}</td></tr>`,
     )
 
     for (const category of group.categories) {
@@ -58,7 +58,7 @@ export function buildCategoryMatrixHtml(
       }
     }
 
-    sections.push(totalRow(`${group.cost_center} - Totais`, group.subtotal, matrix, 'total-row'))
+    sections.push(totalRow(`${group.bank_account} - Totais`, group.subtotal, matrix, 'total-row'))
     sections.push(`<tr class="spacer"><td colspan="${headers.length}"></td></tr>`)
   }
 

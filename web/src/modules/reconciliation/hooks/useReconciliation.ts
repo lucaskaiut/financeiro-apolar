@@ -30,8 +30,8 @@ export function useImportOfx() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ costCenterId, content }: { costCenterId: string; content: string }) =>
-      reconciliationService.importOfx(costCenterId, content),
+    mutationFn: ({ bankAccountId, content }: { bankAccountId: string; content: string }) =>
+      reconciliationService.importOfx(bankAccountId, content),
     onSuccess: (result) => {
       invalidate(queryClient)
       toast.success('Importação concluída', `${result.imported} transações importadas.`)
@@ -100,7 +100,7 @@ export function useCreateAccountFromTransaction() {
         type: 'payable' | 'receivable'
         description: string
         category_id: string
-        cost_center_id?: string
+        bank_account_id?: string
         value?: number
         due_date?: string
       }

@@ -46,7 +46,7 @@ export function CategoryMatrixTable({ matrix, compact = false, className }: Cate
         </thead>
         <tbody>
           {matrix.groups.map((group) => (
-            <CostCenterRows key={group.cost_center} group={group} matrix={matrix} cellClass={cellClass} compact={compact} />
+            <BankAccountRows key={group.bank_account} group={group} matrix={matrix} cellClass={cellClass} compact={compact} />
           ))}
 
           <GrandTotalRow matrix={matrix} cellClass={cellClass} compact={compact} />
@@ -86,7 +86,7 @@ function AmountCells({
   )
 }
 
-function CostCenterRows({
+function BankAccountRows({
   group,
   matrix,
   cellClass,
@@ -104,17 +104,17 @@ function CostCenterRows({
           colSpan={matrix.columns.length + 2}
           className={cn('sticky left-0 z-10 bg-blue-100/95 font-semibold text-foreground dark:bg-blue-950/90', cellClass, 'whitespace-nowrap')}
         >
-          {group.cost_center}
+          {group.bank_account}
         </td>
       </tr>
 
       {group.categories.map((category) => (
-        <CategoryRows key={`${group.cost_center}-${category.category}`} category={category} matrix={matrix} cellClass={cellClass} />
+        <CategoryRows key={`${group.bank_account}-${category.category}`} category={category} matrix={matrix} cellClass={cellClass} />
       ))}
 
       <tr className={cn('border-b border-surface-3 bg-blue-200/70 font-bold dark:bg-blue-900/50', compact ? 'text-[11px]' : 'text-sm')}>
         <td className={cn('sticky left-0 z-10 bg-blue-200/95 text-foreground dark:bg-blue-900/90', labelColumnClass, cellClass)}>
-          {group.cost_center} - Totais
+          {group.bank_account} - Totais
         </td>
         <AmountCells totals={group.subtotal} matrix={matrix} cellClass={cellClass} />
       </tr>

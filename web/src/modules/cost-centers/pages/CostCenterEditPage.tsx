@@ -52,11 +52,6 @@ export default function CostCenterEditPage() {
             mode="edit"
             defaultValues={{
               name: query.data.name,
-              bank: query.data.bank ?? '',
-              agency: query.data.agency ?? '',
-              account: query.data.account ?? '',
-              type: query.data.type,
-              initial_balance: String(query.data.initial_balance),
               status: query.data.status,
             }}
             submitting={update.isPending}

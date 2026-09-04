@@ -13,7 +13,7 @@ export function buildMonthlySummaryHtml(data: MonthlySummaryReport, title: strin
 
   for (const row of data.rows) {
     const cells = [
-      escapeHtml(row.cost_center),
+      escapeHtml(row.bank_account),
       ...data.columns.map((column) => cell(row.amounts[column.key])),
       cell(row.total),
     ]

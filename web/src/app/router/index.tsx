@@ -21,6 +21,19 @@ const CostCentersListPage = lazy(() => import('@/modules/cost-centers/pages/Cost
 const CostCenterCreatePage = lazy(() => import('@/modules/cost-centers/pages/CostCenterCreatePage'))
 const CostCenterEditPage = lazy(() => import('@/modules/cost-centers/pages/CostCenterEditPage'))
 
+const BankAccountsListPage = lazy(() => import('@/modules/bank-accounts/pages/BankAccountsListPage'))
+const BankAccountCreatePage = lazy(() => import('@/modules/bank-accounts/pages/BankAccountCreatePage'))
+const BankAccountEditPage = lazy(() => import('@/modules/bank-accounts/pages/BankAccountEditPage'))
+
+const CompaniesListPage = lazy(() => import('@/modules/companies/pages/CompaniesListPage'))
+const CompanyCreatePage = lazy(() => import('@/modules/companies/pages/CompanyCreatePage'))
+const CompanyEditPage = lazy(() => import('@/modules/companies/pages/CompanyEditPage'))
+
+const CreditCardsListPage = lazy(() => import('@/modules/credit-cards/pages/CreditCardsListPage'))
+const CreditCardCreatePage = lazy(() => import('@/modules/credit-cards/pages/CreditCardCreatePage'))
+const CreditCardEditPage = lazy(() => import('@/modules/credit-cards/pages/CreditCardEditPage'))
+const CreditCardDetailPage = lazy(() => import('@/modules/credit-cards/pages/CreditCardDetailPage'))
+
 const CategoriesListPage = lazy(() => import('@/modules/categories/pages/CategoriesListPage'))
 const CategoryCreatePage = lazy(() => import('@/modules/categories/pages/CategoryCreatePage'))
 const CategoryEditPage = lazy(() => import('@/modules/categories/pages/CategoryEditPage'))
@@ -117,6 +130,30 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: '/bank-accounts',
+            element: (
+              <PermissionGuard permission={Permission.BANK_ACCOUNTS_VIEW}>
+                <BankAccountsListPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/bank-accounts/create',
+            element: (
+              <PermissionGuard permission={Permission.BANK_ACCOUNTS_CREATE}>
+                <BankAccountCreatePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/bank-accounts/:id/edit',
+            element: (
+              <PermissionGuard permission={Permission.BANK_ACCOUNTS_UPDATE}>
+                <BankAccountEditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
             path: '/cost-centers',
             element: (
               <PermissionGuard permission={Permission.COST_CENTERS_VIEW}>
@@ -137,6 +174,62 @@ export const router = createBrowserRouter([
             element: (
               <PermissionGuard permission={Permission.COST_CENTERS_UPDATE}>
                 <CostCenterEditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/companies',
+            element: (
+              <PermissionGuard permission={Permission.COMPANIES_VIEW}>
+                <CompaniesListPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/companies/create',
+            element: (
+              <PermissionGuard permission={Permission.COMPANIES_CREATE}>
+                <CompanyCreatePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/companies/:id/edit',
+            element: (
+              <PermissionGuard permission={Permission.COMPANIES_UPDATE}>
+                <CompanyEditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/credit-cards',
+            element: (
+              <PermissionGuard permission={Permission.CREDIT_CARDS_VIEW}>
+                <CreditCardsListPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/credit-cards/create',
+            element: (
+              <PermissionGuard permission={Permission.CREDIT_CARDS_CREATE}>
+                <CreditCardCreatePage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/credit-cards/:id/edit',
+            element: (
+              <PermissionGuard permission={Permission.CREDIT_CARDS_UPDATE}>
+                <CreditCardEditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/credit-cards/:id',
+            element: (
+              <PermissionGuard permission={Permission.CREDIT_CARDS_VIEW}>
+                <CreditCardDetailPage />
               </PermissionGuard>
             ),
           },

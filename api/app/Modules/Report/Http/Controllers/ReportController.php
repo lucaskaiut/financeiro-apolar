@@ -15,7 +15,7 @@ class ReportController extends ApiController
     {
         return $this->success($this->service->daily(
             $request->string('date')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -24,7 +24,7 @@ class ReportController extends ApiController
         return $this->success($this->service->weekly(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -34,7 +34,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -42,7 +42,7 @@ class ReportController extends ApiController
     {
         return $this->service->dailyExport(
             $request->string('date')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -51,7 +51,7 @@ class ReportController extends ApiController
         return $this->service->weeklyExport(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -61,7 +61,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -70,14 +70,14 @@ class ReportController extends ApiController
         return $this->success($this->service->byCategory(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
     public function byCostCenter(Request $request): JsonResponse
     {
         return $this->success($this->service->byCostCenter(
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -86,7 +86,7 @@ class ReportController extends ApiController
         return $this->service->byCategoryExport(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -95,7 +95,7 @@ class ReportController extends ApiController
         return $this->success($this->service->monthlySummary(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -104,14 +104,14 @@ class ReportController extends ApiController
         return $this->service->monthlySummaryExport(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
     public function byCostCenterExport(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         return $this->service->byCostCenterExport(
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -121,7 +121,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
     }
 
@@ -132,7 +132,7 @@ class ReportController extends ApiController
         return $this->service->payablesExport(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
             $selectedIds,
         );
     }
@@ -143,7 +143,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 
@@ -152,7 +152,7 @@ class ReportController extends ApiController
         return $this->success($this->service->payables(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         ));
     }
 }

@@ -25,11 +25,11 @@ class UpdateRecurrenceRequest extends FormRequest
             'type' => ['sometimes', 'required', 'string', Rule::in(AccountType::values())],
             'description' => ['sometimes', 'required', 'string', 'max:255'],
             'counterparty' => ['nullable', 'string', 'max:255'],
-            'cost_center_id' => [
+            'bank_account_id' => [
                 'sometimes',
                 'required',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'category_id' => [
                 'sometimes',

@@ -1,32 +1,32 @@
 import { useRef, useState } from 'react'
 import { FileUp, Upload } from 'lucide-react'
 import { Button, Modal, Select } from '@/shared/design-system'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useImportAccounts } from '../hooks/useAccounts'
 import { toast } from '@/shared/stores/toast.store'
 
 export function ImportAccountsDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
   const importAccounts = useImportAccounts()
 
   const reset = () => {
     setFile(null)
-    setCostCenterId('')
+    setBankAccountId('')
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const handleImport = () => {
-    if (!file || !costCenterId) {
-      toast.error('Importação', 'Selecione o arquivo e o centro de custo.')
+    if (!file || !bankAccountId) {
+      toast.error('Importação', 'Selecione o arquivo e a conta bancária.')
       return
     }
 
     importAccounts.mutate(
-      { file, costCenterId },
+      { file, bankAccountId },
       {
         onSuccess: () => {
           reset()
@@ -80,11 +80,11 @@ export function ImportAccountsDialog({ open, onClose }: { open: boolean; onClose
         </div>
 
         <Select
-          aria-label="Centro de custo"
-          value={costCenterId}
-          onChange={(e) => setCostCenterId(e.target.value)}
-          options={costCenters.data ?? []}
-          placeholder="Selecione o centro de custo"
+          aria-label="Conta bancária"
+          value={bankAccountId}
+          onChange={(e) => setBankAccountId(e.target.value)}
+          options={bankAccounts.data ?? []}
+          placeholder="Selecione a conta bancária"
         />
       </div>
     </Modal>

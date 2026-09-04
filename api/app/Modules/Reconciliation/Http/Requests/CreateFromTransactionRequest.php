@@ -27,10 +27,10 @@ class CreateFromTransactionRequest extends FormRequest
                 'string',
                 Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
-            'cost_center_id' => [
+            'bank_account_id' => [
                 'nullable',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'value' => ['nullable', 'numeric', 'gt:0'],
             'due_date' => ['nullable', 'date'],

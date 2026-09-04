@@ -10,14 +10,7 @@ class CostCenterService
     public function paginate(int $perPage = 15, ?string $search = null): LengthAwarePaginator
     {
         return CostCenter::query()
-            ->when(filled($search), function ($query) use ($search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query->where('name', 'like', "%{$search}%")
-                        ->orWhere('bank', 'like', "%{$search}%")
-                        ->orWhere('agency', 'like', "%{$search}%")
-                        ->orWhere('account', 'like', "%{$search}%");
-                });
-            })
+            ->when(filled($search), fn ($query) => $query->where('name', 'like', "%{$search}%"))
             ->orderBy('name')
             ->paginate(min(max($perPage, 1), 100));
     }
@@ -28,13 +21,14 @@ class CostCenterService
     public function all(): array
     {
         return CostCenter::query()
+            ->where('status', 'active')
             ->orderBy('name')
             ->get()
             ->all();
     }
 
     /**
-     * @param  array{name: string, bank?: ?string, agency?: ?string, account?: ?string, type: string, initial_balance?: numeric|string, status?: string}  $data
+     * @param  array{name: string, status?: string}  $data
      */
     public function create(array $data): CostCenter
     {

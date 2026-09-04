@@ -16,7 +16,7 @@ class CashFlowController extends ApiController
         $data = $this->service->realized(
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
             $request->string('category_id')->toString() ?: null,
         );
 
@@ -29,7 +29,7 @@ class CashFlowController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
 
         return $this->success($data);

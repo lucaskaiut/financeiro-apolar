@@ -5,8 +5,11 @@ import {
   BarChart3,
   BookOpenCheck,
   Bot,
+  Building2,
+  CreditCard,
   LayoutDashboard,
   Landmark,
+  Layers,
   LogOut,
   Menu,
   Repeat,
@@ -58,7 +61,7 @@ function Brand() {
         <Zap className="size-4.5" aria-hidden="true" />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm leading-tight font-semibold text-foreground">Nox</span>
+        <span className="block text-sm leading-tight font-semibold text-foreground">Apolar</span>
         <span className="block truncate text-xs text-muted">{activeName}</span>
       </span>
     </div>
@@ -102,8 +105,17 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
       </SidebarGroup>
 
       <SidebarGroup label="Cadastros">
+        {can(Permission.BANK_ACCOUNTS_VIEW) && (
+          <SidebarItem to="/bank-accounts" icon={Landmark} label="Contas bancárias" onNavigate={onNavigate} />
+        )}
         {can(Permission.COST_CENTERS_VIEW) && (
-          <SidebarItem to="/cost-centers" icon={Landmark} label="Centros de custo" onNavigate={onNavigate} />
+          <SidebarItem to="/cost-centers" icon={Layers} label="Centros de custo" onNavigate={onNavigate} />
+        )}
+        {can(Permission.COMPANIES_VIEW) && (
+          <SidebarItem to="/companies" icon={Building2} label="Empresas" onNavigate={onNavigate} />
+        )}
+        {can(Permission.CREDIT_CARDS_VIEW) && (
+          <SidebarItem to="/credit-cards" icon={CreditCard} label="Cartões de crédito" onNavigate={onNavigate} />
         )}
         {can(Permission.CATEGORIES_VIEW) && (
           <SidebarItem to="/categories" icon={Tags} label="Categorias" onNavigate={onNavigate} />

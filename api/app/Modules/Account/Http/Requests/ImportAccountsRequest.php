@@ -20,10 +20,10 @@ class ImportAccountsRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:20480'],
-            'cost_center_id' => [
+            'bank_account_id' => [
                 'required',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
         ];
     }

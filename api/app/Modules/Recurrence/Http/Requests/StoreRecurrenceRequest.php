@@ -25,10 +25,10 @@ class StoreRecurrenceRequest extends FormRequest
             'type' => ['required', 'string', Rule::in(AccountType::values())],
             'description' => ['required', 'string', 'max:255'],
             'counterparty' => ['nullable', 'string', 'max:255'],
-            'cost_center_id' => [
+            'bank_account_id' => [
                 'required',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'category_id' => [
                 'required',

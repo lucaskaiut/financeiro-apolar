@@ -3,7 +3,7 @@
 namespace App\Modules\Transfer\Models;
 
 use App\Modules\Account\Models\FinancialAccount;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Shared\Models\Concerns\HasUuid;
 use App\Modules\Tenant\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
@@ -18,8 +18,8 @@ class Transfer extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'from_cost_center_id',
-        'to_cost_center_id',
+        'from_bank_account_id',
+        'to_bank_account_id',
         'value',
         'date',
         'description',
@@ -35,12 +35,12 @@ class Transfer extends Model
 
     public function fromCostCenter(): BelongsTo
     {
-        return $this->belongsTo(CostCenter::class, 'from_cost_center_id', 'uuid');
+        return $this->belongsTo(BankAccount::class, 'from_bank_account_id', 'uuid');
     }
 
     public function toCostCenter(): BelongsTo
     {
-        return $this->belongsTo(CostCenter::class, 'to_cost_center_id', 'uuid');
+        return $this->belongsTo(BankAccount::class, 'to_bank_account_id', 'uuid');
     }
 
     public function accounts(): HasMany

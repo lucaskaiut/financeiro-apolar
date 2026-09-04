@@ -12,10 +12,25 @@ export const Permission = {
   ROLE_UPDATE: 'role.update',
   ROLE_DELETE: 'role.delete',
 
+  BANK_ACCOUNTS_VIEW: 'bank_accounts.view',
+  BANK_ACCOUNTS_CREATE: 'bank_accounts.create',
+  BANK_ACCOUNTS_UPDATE: 'bank_accounts.update',
+  BANK_ACCOUNTS_DELETE: 'bank_accounts.delete',
+
   COST_CENTERS_VIEW: 'cost_centers.view',
   COST_CENTERS_CREATE: 'cost_centers.create',
   COST_CENTERS_UPDATE: 'cost_centers.update',
   COST_CENTERS_DELETE: 'cost_centers.delete',
+
+  COMPANIES_VIEW: 'companies.view',
+  COMPANIES_CREATE: 'companies.create',
+  COMPANIES_UPDATE: 'companies.update',
+  COMPANIES_DELETE: 'companies.delete',
+
+  CREDIT_CARDS_VIEW: 'credit_cards.view',
+  CREDIT_CARDS_CREATE: 'credit_cards.create',
+  CREDIT_CARDS_UPDATE: 'credit_cards.update',
+  CREDIT_CARDS_DELETE: 'credit_cards.delete',
 
   CATEGORIES_VIEW: 'categories.view',
   CATEGORIES_CREATE: 'categories.create',
@@ -86,12 +101,39 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    label: 'Contas bancárias',
+    permissions: [
+      { value: Permission.BANK_ACCOUNTS_VIEW, label: 'Visualizar contas bancárias' },
+      { value: Permission.BANK_ACCOUNTS_CREATE, label: 'Criar contas bancárias' },
+      { value: Permission.BANK_ACCOUNTS_UPDATE, label: 'Editar contas bancárias' },
+      { value: Permission.BANK_ACCOUNTS_DELETE, label: 'Remover contas bancárias' },
+    ],
+  },
+  {
     label: 'Centros de custo',
     permissions: [
       { value: Permission.COST_CENTERS_VIEW, label: 'Visualizar centros de custo' },
       { value: Permission.COST_CENTERS_CREATE, label: 'Criar centros de custo' },
       { value: Permission.COST_CENTERS_UPDATE, label: 'Editar centros de custo' },
       { value: Permission.COST_CENTERS_DELETE, label: 'Remover centros de custo' },
+    ],
+  },
+  {
+    label: 'Empresas',
+    permissions: [
+      { value: Permission.COMPANIES_VIEW, label: 'Visualizar empresas' },
+      { value: Permission.COMPANIES_CREATE, label: 'Criar empresas' },
+      { value: Permission.COMPANIES_UPDATE, label: 'Editar empresas' },
+      { value: Permission.COMPANIES_DELETE, label: 'Remover empresas' },
+    ],
+  },
+  {
+    label: 'Cartões de crédito',
+    permissions: [
+      { value: Permission.CREDIT_CARDS_VIEW, label: 'Visualizar cartões de crédito' },
+      { value: Permission.CREDIT_CARDS_CREATE, label: 'Criar cartões de crédito' },
+      { value: Permission.CREDIT_CARDS_UPDATE, label: 'Editar cartões de crédito' },
+      { value: Permission.CREDIT_CARDS_DELETE, label: 'Remover cartões de crédito' },
     ],
   },
   {

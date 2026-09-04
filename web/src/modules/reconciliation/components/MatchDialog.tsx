@@ -17,7 +17,7 @@ import {
 } from '@/shared/design-system'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
 import { categoriesService } from '@/modules/categories/services/categories.service'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import type { BankTransaction } from '@/shared/types/models'
 import { useCandidates, useCreateAccountFromTransaction, useReconcile } from '../hooks/useReconciliation'
 
@@ -25,7 +25,7 @@ const createSchema = z.object({
   type: z.enum(['payable', 'receivable']),
   description: z.string().min(1, 'Informe a descrição'),
   category_id: z.string().min(1, 'Selecione a categoria'),
-  cost_center_id: z.string().min(1, 'Selecione o centro de custo'),
+  bank_account_id: z.string().min(1, 'Selecione o conta bancária'),
   value: z.string().refine((v) => v !== '' && Number(v) > 0, 'Informe um valor válido'),
   due_date: z.string().min(1, 'Informe a data'),
 })
@@ -48,7 +48,7 @@ export function MatchDialog({
   const candidates = useCandidates(open && transaction ? transaction.id : undefined, from || undefined, to || undefined)
   const reconcile = useReconcile()
   const createAccount = useCreateAccountFromTransaction()
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
 
   const [creating, setCreating] = useState(false)
 
@@ -58,7 +58,7 @@ export function MatchDialog({
       type: 'payable',
       description: '',
       category_id: '',
-      cost_center_id: '',
+      bank_account_id: '',
       value: '',
       due_date: '',
     },
@@ -71,7 +71,7 @@ export function MatchDialog({
       type: transaction.type === 'credit' ? 'receivable' : 'payable',
       description: transaction.description ?? '',
       category_id: '',
-      cost_center_id: transaction.cost_center_id ?? '',
+      bank_account_id: transaction.bank_account_id ?? '',
       value: String(transaction.value ?? ''),
       due_date: transaction.date ?? '',
     })
@@ -109,7 +109,7 @@ export function MatchDialog({
         type: values.type,
         description: values.description,
         category_id: values.category_id,
-        cost_center_id: values.cost_center_id || undefined,
+        bank_account_id: values.bank_account_id || undefined,
         value: Number(values.value),
         due_date: values.due_date,
       },
@@ -140,7 +140,7 @@ export function MatchDialog({
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">{account.description}</p>
                 <p className="truncate text-[13px] text-muted">
-                  {account.cost_center} · vencimento {formatDate(account.due_date)}
+                  {account.bank_account} · vencimento {formatDate(account.due_date)}
                 </p>
               </div>
               <Badge variant={account.type === 'receivable' ? 'success' : 'warning'}>
@@ -179,7 +179,7 @@ export function MatchDialog({
             <TextField name="value" label="Valor" type="number" step="0.01" min="0" required />
             <TextField name="due_date" label="Data de vencimento" type="date" required />
           </div>
-          <SelectField name="cost_center_id" label="Centro de custo" options={costCenters.data ?? []} placeholder="Selecione" required />
+          <SelectField name="bank_account_id" label="Conta bancária" options={bankAccounts.data ?? []} placeholder="Selecione" required />
           <TextField name="description" label="Descrição" required />
           <SearchSelectField
             name="category_id"

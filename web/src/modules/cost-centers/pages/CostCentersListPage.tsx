@@ -20,7 +20,6 @@ import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { useDebounce } from '@/shared/hooks/useDebounce'
-import { formatCurrency } from '@/shared/utils/format'
 import type { CostCenter } from '@/shared/types/models'
 import { useCostCentersQuery, useDeleteCostCenter } from '../hooks/useCostCenters'
 
@@ -63,24 +62,7 @@ export default function CostCentersListPage() {
     {
       key: 'name',
       header: 'Centro de custo',
-      render: (cc) => (
-        <div className="min-w-0">
-          <p className="font-medium text-foreground">{cc.name}</p>
-          <p className="text-[13px] text-muted">
-            {[cc.bank, cc.agency, cc.account].filter(Boolean).join(' · ') || '—'}
-          </p>
-        </div>
-      ),
-    },
-    {
-      key: 'type',
-      header: 'Tipo',
-      render: (cc) => <span className="text-muted">{cc.type_label}</span>,
-    },
-    {
-      key: 'initial_balance',
-      header: 'Saldo inicial',
-      render: (cc) => <span className="text-muted">{formatCurrency(cc.initial_balance)}</span>,
+      render: (cc) => <span className="font-medium text-foreground">{cc.name}</span>,
     },
     {
       key: 'status',
@@ -117,7 +99,7 @@ export default function CostCentersListPage() {
     <Page>
       <PageHeader
         title="Centros de custo"
-        description="Cada centro de custo representa uma conta bancária operacional."
+        description="Organize despesas e receitas por área ou departamento."
         breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Centros de custo' }]}
         actions={
           <Can permission={Permission.COST_CENTERS_CREATE}>
@@ -132,7 +114,7 @@ export default function CostCentersListPage() {
       <PageContent>
         <FilterBar>
           <SearchInput
-            placeholder="Buscar por nome, banco ou conta..."
+            placeholder="Buscar por nome..."
             aria-label="Buscar centros de custo"
             value={search}
             onChange={(e) => {
@@ -152,7 +134,7 @@ export default function CostCentersListPage() {
             <EmptyState
               icon={Landmark}
               title="Nenhum centro de custo cadastrado"
-              description="Cadastre uma conta bancária para começar a movimentar."
+              description="Cadastre centros de custo para classificar lançamentos e rateios."
             />
           }
         />

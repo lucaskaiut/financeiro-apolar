@@ -17,10 +17,25 @@ enum Permission: string
     case ROLE_UPDATE = 'role.update';
     case ROLE_DELETE = 'role.delete';
 
+    case BANK_ACCOUNTS_VIEW = 'bank_accounts.view';
+    case BANK_ACCOUNTS_CREATE = 'bank_accounts.create';
+    case BANK_ACCOUNTS_UPDATE = 'bank_accounts.update';
+    case BANK_ACCOUNTS_DELETE = 'bank_accounts.delete';
+
     case COST_CENTERS_VIEW = 'cost_centers.view';
     case COST_CENTERS_CREATE = 'cost_centers.create';
     case COST_CENTERS_UPDATE = 'cost_centers.update';
     case COST_CENTERS_DELETE = 'cost_centers.delete';
+
+    case COMPANIES_VIEW = 'companies.view';
+    case COMPANIES_CREATE = 'companies.create';
+    case COMPANIES_UPDATE = 'companies.update';
+    case COMPANIES_DELETE = 'companies.delete';
+
+    case CREDIT_CARDS_VIEW = 'credit_cards.view';
+    case CREDIT_CARDS_CREATE = 'credit_cards.create';
+    case CREDIT_CARDS_UPDATE = 'credit_cards.update';
+    case CREDIT_CARDS_DELETE = 'credit_cards.delete';
 
     case CATEGORIES_VIEW = 'categories.view';
     case CATEGORIES_CREATE = 'categories.create';
@@ -75,7 +90,10 @@ enum Permission: string
             self::USER_READ,
             self::TENANT_READ,
             self::ROLE_READ,
+            self::BANK_ACCOUNTS_VIEW,
             self::COST_CENTERS_VIEW,
+            self::COMPANIES_VIEW,
+            self::CREDIT_CARDS_VIEW,
             self::CATEGORIES_VIEW,
             self::ACCOUNTS_VIEW,
             self::RECURRENCES_VIEW,

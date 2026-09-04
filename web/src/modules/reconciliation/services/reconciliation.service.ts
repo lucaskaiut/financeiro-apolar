@@ -6,7 +6,7 @@ export interface ReconciliationListParams {
   page?: number
   per_page?: number
   status?: string
-  cost_center_id?: string
+  bank_account_id?: string
 }
 
 export const reconciliationService = {
@@ -16,9 +16,9 @@ export const reconciliationService = {
     return response.data
   },
 
-  async importOfx(cost_center_id: string, content: string): Promise<{ imported: number; skipped: number }> {
+  async importOfx(bank_account_id: string, content: string): Promise<{ imported: number; skipped: number }> {
     const response = await http.post<ApiResponse<{ imported: number; skipped: number }>>('/reconciliation/import', {
-      cost_center_id,
+      bank_account_id,
       content,
     })
 
@@ -69,7 +69,7 @@ export const reconciliationService = {
       type: 'payable' | 'receivable'
       description: string
       category_id: string
-      cost_center_id?: string
+      bank_account_id?: string
       value?: number
       due_date?: string
     },

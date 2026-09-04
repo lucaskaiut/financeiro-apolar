@@ -6,7 +6,7 @@ use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Transfer\Models\Transfer;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -23,21 +23,21 @@ class TransferService
     }
 
     /**
-     * @param  array{from_cost_center_id: string, to_cost_center_id: string, value: numeric, date: string, description?: ?string}  $data
+     * @param  array{from_bank_account_id: string, to_bank_account_id: string, value: numeric, date: string, description?: ?string}  $data
      */
     public function create(array $data): Transfer
     {
         return DB::transaction(function () use ($data): Transfer {
             $transfer = Transfer::query()->create($data);
 
-            $from = $this->costCenterId($data['from_cost_center_id']);
-            $to = $this->costCenterId($data['to_cost_center_id']);
+            $from = $this->bankAccountId($data['from_bank_account_id']);
+            $to = $this->bankAccountId($data['to_bank_account_id']);
             $value = round((float) $data['value'], 2);
 
             $outgoing = FinancialAccount::query()->create([
                 'type' => AccountType::Payable,
                 'description' => $data['description'] ?? "Transferência para {$to->name}",
-                'cost_center_id' => $from->uuid,
+                'bank_account_id' => $from->uuid,
                 'category_id' => null,
                 'value' => $value,
                 'due_date' => $data['date'],
@@ -49,7 +49,7 @@ class TransferService
             $incoming = FinancialAccount::query()->create([
                 'type' => AccountType::Receivable,
                 'description' => $data['description'] ?? "Transferência de {$from->name}",
-                'cost_center_id' => $to->uuid,
+                'bank_account_id' => $to->uuid,
                 'category_id' => null,
                 'value' => $value,
                 'due_date' => $data['date'],
@@ -85,8 +85,8 @@ class TransferService
         });
     }
 
-    private function costCenterId(string $uuid): CostCenter
+    private function bankAccountId(string $uuid): BankAccount
     {
-        return CostCenter::query()->where('uuid', $uuid)->firstOrFail();
+        return BankAccount::query()->where('uuid', $uuid)->firstOrFail();
     }
 }

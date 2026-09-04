@@ -13,12 +13,12 @@ export function buildPayablesExportReport(data: PayablesReport, selectedIds: Set
   const groupsMap = new Map<string, PayablesExportReport['groups'][number]>()
 
   for (const account of data.accounts) {
-    const key = costCenterName(account.cost_center)
+    const key = costCenterName(account.bank_account)
 
     if (!groupsMap.has(key)) {
       groupsMap.set(key, {
-        cost_center: key,
-        cost_center_id: account.cost_center_id,
+        bank_account: key,
+        bank_account_id: account.bank_account_id,
         overdue: { accounts: [], total: 0 },
         due_today: { accounts: [], total: 0 },
         total_overdue: 0,
@@ -52,10 +52,10 @@ export function buildPayablesExportReport(data: PayablesReport, selectedIds: Set
       group.total_paid_today = round2(group.total_paid_today)
       return group
     })
-    .sort((a, b) => a.cost_center.localeCompare(b.cost_center, 'pt-BR'))
+    .sort((a, b) => a.bank_account.localeCompare(b.bank_account, 'pt-BR'))
 
-  const paidRows = groups.map((group) => ({ cost_center: group.cost_center, amount: group.total_paid_today }))
-  const overdueRows = groups.map((group) => ({ cost_center: group.cost_center, amount: group.total_overdue }))
+  const paidRows = groups.map((group) => ({ bank_account: group.bank_account, amount: group.total_paid_today }))
+  const overdueRows = groups.map((group) => ({ bank_account: group.bank_account, amount: group.total_overdue }))
   const totalPaidToday = round2(paidRows.reduce((sum, row) => sum + row.amount, 0))
   const totalOverdue = round2(overdueRows.reduce((sum, row) => sum + row.amount, 0))
 
@@ -96,7 +96,7 @@ export function buildPayablesReportHtml(data: PayablesExportReport, title: strin
   const sections: string[] = []
 
   for (const group of data.groups) {
-    sections.push(`<tr class="section-banner"><td colspan="3">${escapeHtml(group.cost_center)}</td></tr>`)
+    sections.push(`<tr class="section-banner"><td colspan="3">${escapeHtml(group.bank_account)}</td></tr>`)
     sections.push(
       `<tr class="column-header">
         <th>Data</th>
@@ -133,14 +133,14 @@ export function buildPayablesReportHtml(data: PayablesExportReport, title: strin
   const paidSummaryRows = data.summary.paid_today.rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.cost_center)}</td><td class="amount">${escapeHtml(formatCurrency(row.amount))}</td></tr>`,
+        `<tr><td>${escapeHtml(row.bank_account)}</td><td class="amount">${escapeHtml(formatCurrency(row.amount))}</td></tr>`,
     )
     .join('')
 
   const overdueSummaryRows = data.summary.overdue.rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.cost_center)}</td><td class="amount">${escapeHtml(formatCurrency(row.amount))}</td></tr>`,
+        `<tr><td>${escapeHtml(row.bank_account)}</td><td class="amount">${escapeHtml(formatCurrency(row.amount))}</td></tr>`,
     )
     .join('')
 

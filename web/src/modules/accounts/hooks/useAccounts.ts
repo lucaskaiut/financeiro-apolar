@@ -44,8 +44,8 @@ export function useImportAccounts() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ file, costCenterId }: { file: File; costCenterId: string }) =>
-      accountsService.importXlsx(file, costCenterId),
+    mutationFn: ({ file, bankAccountId }: { file: File; bankAccountId: string }) =>
+      accountsService.importXlsx(file, bankAccountId),
     onSuccess: () => {
       invalidateAccounts(queryClient)
       toast.success('Importação iniciada', 'A planilha será processada em segundo plano. Atualize a lista em instantes.')

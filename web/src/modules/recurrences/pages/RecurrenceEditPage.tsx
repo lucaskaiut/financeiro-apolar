@@ -53,7 +53,7 @@ export default function RecurrenceEditPage() {
               type: query.data.type as 'payable' | 'receivable',
               description: query.data.description,
               counterparty: query.data.counterparty ?? '',
-              cost_center_id: query.data.cost_center_id ?? '',
+              bank_account_id: query.data.bank_account_id ?? '',
               category_id: query.data.category_id ?? '',
               subcategory_id: query.data.subcategory_id ?? '',
               value: String(query.data.value),

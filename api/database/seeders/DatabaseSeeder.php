@@ -10,7 +10,7 @@ use App\Modules\Auth\DTOs\NewTenantData;
 use App\Modules\Auth\DTOs\NewUserData;
 use App\Modules\Auth\Services\AuthService;
 use App\Modules\Category\Models\Category;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Tenant\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -50,9 +50,9 @@ class DatabaseSeeder extends Seeder
     {
         $tid = $tenant->getKey();
 
-        $bb = $this->costCenter($tid, 'Banco do Brasil', '001', 50000);
-        $itau = $this->costCenter($tid, 'Itaú', '341', 35000);
-        $caixa = $this->costCenter($tid, 'Caixa Econômica', '104', 25000);
+        $bb = $this->bankAccount($tid, 'Banco do Brasil', '001', 50000);
+        $itau = $this->bankAccount($tid, 'Itaú', '341', 35000);
+        $caixa = $this->bankAccount($tid, 'Caixa Econômica', '104', 25000);
 
         $vendas = $this->category($tid, 'Vendas', 'income', '#10b981');
         $servicos = $this->category($tid, 'Serviços', 'income', '#14b8a6');
@@ -91,9 +91,9 @@ class DatabaseSeeder extends Seeder
         $this->partialAccount($tid, AccountType::Receivable, 'Cliente Gama', 'Gama Ltda', $caixa, $vendas, 11000, 6000, now()->addDays(10));
     }
 
-    private function costCenter(int $tid, string $name, string $agency, float $initialBalance): string
+    private function bankAccount(int $tid, string $name, string $agency, float $initialBalance): string
     {
-        return CostCenter::query()->create([
+        return BankAccount::query()->create([
             'tenant_id' => $tid,
             'name' => $name,
             'bank' => $name,
@@ -123,7 +123,7 @@ class DatabaseSeeder extends Seeder
             'type' => $type,
             'description' => $description,
             'counterparty' => $counterparty,
-            'cost_center_id' => $costCenterUuid,
+            'bank_account_id' => $costCenterUuid,
             'category_id' => $categoryUuid,
             'value' => $value,
             'due_date' => $date,
@@ -146,7 +146,7 @@ class DatabaseSeeder extends Seeder
             'type' => $type,
             'description' => $description,
             'counterparty' => $counterparty,
-            'cost_center_id' => $costCenterUuid,
+            'bank_account_id' => $costCenterUuid,
             'category_id' => $categoryUuid,
             'value' => $value,
             'due_date' => $dueDate,
@@ -161,7 +161,7 @@ class DatabaseSeeder extends Seeder
             'type' => $type,
             'description' => $description,
             'counterparty' => $counterparty,
-            'cost_center_id' => $costCenterUuid,
+            'bank_account_id' => $costCenterUuid,
             'category_id' => $categoryUuid,
             'value' => $value,
             'due_date' => $dueDate,

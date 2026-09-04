@@ -1,7 +1,7 @@
-import type { CategoryMatrix, CategoryMatrixCategoryGroup, CategoryMatrixCostCenterGroup } from '../services/reports.service'
+import type { CategoryMatrix, CategoryMatrixCategoryGroup, CategoryMatrixBankAccountGroup } from '../services/reports.service'
 import { applyColumnTableState, type ColumnTableState } from './column-table'
 
-function recalculateGroupSubtotal(group: CategoryMatrixCostCenterGroup): CategoryMatrixCostCenterGroup {
+function recalculateGroupSubtotal(group: CategoryMatrixBankAccountGroup): CategoryMatrixBankAccountGroup {
   const keys = Object.keys(group.subtotal.amounts)
   const amounts: Record<string, number> = {}
 
@@ -35,7 +35,7 @@ export function applyColumnFiltersToCategoryMatrix(
       if (categories.length === 0) return null
       return recalculateGroupSubtotal({ ...group, categories })
     })
-    .filter((group): group is CategoryMatrixCostCenterGroup => group !== null)
+    .filter((group): group is CategoryMatrixBankAccountGroup => group !== null)
 
   const amountKeys = matrix.columns.map((column) => column.key)
   const grandAmounts: Record<string, number> = {}

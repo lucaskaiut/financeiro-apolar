@@ -4,11 +4,6 @@ import type { CostCenter } from '@/shared/types/models'
 
 export interface CostCenterPayload {
   name: string
-  bank?: string | null
-  agency?: string | null
-  account?: string | null
-  type: string
-  initial_balance?: number
   status?: string
 }
 

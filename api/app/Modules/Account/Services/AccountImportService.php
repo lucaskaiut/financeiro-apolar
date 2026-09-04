@@ -35,7 +35,7 @@ class AccountImportService
      *
      * @return array{imported: int, skipped: int}
      */
-    public function importXlsx(UploadedFile $file, string $costCenterId, User $user): array
+    public function importXlsx(UploadedFile $file, string $bankAccountId, User $user): array
     {
         $spreadsheet = IOFactory::load($file->getRealPath());
         $rows = $spreadsheet->getActiveSheet()->toArray(null, true, false);
@@ -102,7 +102,7 @@ class AccountImportService
                 'value' => $amount,
                 'due_date' => $date,
                 'paid_date' => $date,
-                'cost_center_id' => $costCenterId,
+                'bank_account_id' => $bankAccountId,
                 'category_id' => $category->uuid,
                 'subcategory_id' => $subcategory?->uuid,
                 'status' => AccountStatus::Settled,

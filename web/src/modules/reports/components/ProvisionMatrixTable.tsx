@@ -22,8 +22,8 @@ export function ProvisionMatrixTable({ data, compact = false, className }: Provi
 
         <tbody>
           {data.groups.map((group, groupIndex) => (
-            <CostCenterSection
-              key={group.cost_center}
+            <BankAccountSection
+              key={group.bank_account}
               group={group}
               columns={data.columns}
               columnCount={columnCount}
@@ -124,7 +124,7 @@ function AmountCells({
   )
 }
 
-function CostCenterSection({
+function BankAccountSection({
   group,
   columns,
   columnCount,
@@ -143,7 +143,7 @@ function CostCenterSection({
 }) {
   return (
     <>
-      <SectionBanner label={group.cost_center} columnCount={columnCount} compact={compact} withTopSpacing={withTopSpacing} />
+      <SectionBanner label={group.bank_account} columnCount={columnCount} compact={compact} withTopSpacing={withTopSpacing} />
       <ColumnHeaderRow columns={columns} headerClass={headerClass} />
 
       {group.rows.map((row) => (

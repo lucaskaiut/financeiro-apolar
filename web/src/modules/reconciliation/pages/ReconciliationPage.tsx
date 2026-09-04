@@ -20,7 +20,7 @@ import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import type { BankTransaction } from '@/shared/types/models'
 import {
   useAutoReconcile,
@@ -45,13 +45,13 @@ export default function ReconciliationPage() {
 
   const { can } = usePermissions()
 
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
   const importOfx = useImportOfx()
   const autoReconcile = useAutoReconcile()
   const ignore = useIgnoreTransaction()
   const undo = useUndoReconciliation()
 
-  const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setCostCenterId] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [fileName, setFileName] = useState('')
@@ -64,10 +64,10 @@ export default function ReconciliationPage() {
     if (!file) return
     setFileName(file.name)
     const content = await file.text()
-    const cc = costCenterId || costCenters.data?.[0]?.value
+    const cc = bankAccountId || bankAccounts.data?.[0]?.value
 
     if (!cc) return
-    await importOfx.mutateAsync({ costCenterId: cc, content })
+    await importOfx.mutateAsync({ bankAccountId: cc, content })
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -132,12 +132,12 @@ export default function ReconciliationPage() {
         <Card>
           <CardContent className="flex flex-wrap items-end gap-3">
             <div className="min-w-56 flex-1">
-              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Centro de custo</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Conta bancária</label>
               <Select
-                aria-label="Centro de custo"
-                value={costCenterId}
+                aria-label="Conta bancária"
+                value={bankAccountId}
                 onChange={(e) => setCostCenterId(e.target.value)}
-                options={costCenters.data ?? []}
+                options={bankAccounts.data ?? []}
                 placeholder="Selecione"
               />
             </div>

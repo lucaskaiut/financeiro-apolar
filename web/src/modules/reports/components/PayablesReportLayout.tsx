@@ -19,9 +19,9 @@ export function PayablesReportLayout({ data, compact = false, className }: Payab
   return (
     <div className={cn('space-y-8', className)}>
       {data.groups.map((group) => (
-        <section key={group.cost_center} className="overflow-x-auto">
+        <section key={group.bank_account} className="overflow-x-auto">
           <div className={cn('rounded-t-lg bg-surface-2 px-4 py-3 font-bold uppercase tracking-wide text-foreground', compact ? 'text-xs' : 'text-sm')}>
-            {group.cost_center}
+            {group.bank_account}
           </div>
 
           <table className="w-full table-fixed border-collapse">
@@ -207,7 +207,7 @@ function SummaryTable({
   headerClass,
 }: {
   title: string
-  rows: Array<{ cost_center: string; amount: number }>
+  rows: Array<{ bank_account: string; amount: number }>
   totalLabel: string
   total: number
   tone: 'danger' | 'success'
@@ -232,8 +232,8 @@ function SummaryTable({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.cost_center} className="border-b border-surface-3/60">
-              <td className={cn(cellClass, 'text-left text-foreground')}>{row.cost_center}</td>
+            <tr key={row.bank_account} className="border-b border-surface-3/60">
+              <td className={cn(cellClass, 'text-left text-foreground')}>{row.bank_account}</td>
               <td className={cn(cellClass, 'whitespace-nowrap text-right tabular-nums text-foreground')}>
                 {formatCurrency(row.amount)}
               </td>

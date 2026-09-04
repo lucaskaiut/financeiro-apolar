@@ -13,7 +13,7 @@ use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\CashFlow\Services\CashFlowService;
 use App\Modules\Category\Models\Category;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Reconciliation\Models\BankTransaction;
 use App\Modules\Reconciliation\Services\ReconciliationService;
 use App\Modules\Recurrence\Services\RecurrenceService;
@@ -67,10 +67,10 @@ final class AssistantTools
                 .'contas a receber e a pagar em aberto e total vencido. Use para responder perguntas '
                 .'como "qual meu saldo?" ou "como está minha situação financeira?".',
             parameters: [
-                'cost_center_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
+                'bank_account_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
             ],
             handler: function (array $args): array {
-                $cc = $args['cost_center_id'] ?? null;
+                $cc = $args['bank_account_id'] ?? null;
 
                 $today = now()->startOfDay();
                 $monthStart = now()->startOfMonth();
@@ -78,7 +78,7 @@ final class AssistantTools
 
                 $open = FinancialAccount::query()
                     ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-                    ->when($cc, fn ($q) => $q->where('cost_center_id', $cc))
+                    ->when($cc, fn ($q) => $q->where('bank_account_id', $cc))
                     ->withSum('settlements', 'value')
                     ->get();
 
@@ -117,13 +117,13 @@ final class AssistantTools
     private function listCostCenters(): Tool
     {
         return new Tool(
-            name: 'list_cost_centers',
+            name: 'list_bank_accounts',
             description: 'Lista os centros de custo (contas bancárias) do tenant. Útil para obter o ID correto antes de criar lançamentos.',
             parameters: [],
-            handler: fn (): array => CostCenter::query()
+            handler: fn (): array => BankAccount::query()
                 ->orderBy('name')
                 ->get(['uuid', 'name', 'bank'])
-                ->map(fn (CostCenter $cc) => ['id' => $cc->uuid, 'name' => $cc->name, 'banco' => $cc->bank])
+                ->map(fn (BankAccount $account) => ['id' => $account->uuid, 'name' => $account->name, 'banco' => $account->bank])
                 ->all(),
         );
     }
@@ -160,7 +160,7 @@ final class AssistantTools
             ],
             handler: function (array $args): array {
                 $query = FinancialAccount::query()
-                    ->with(['costCenter:id,uuid,name', 'category:id,uuid,name'])
+                    ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name'])
                     ->withSum('settlements', 'value');
 
                 $query->when(isset($args['type']), fn ($q) => $q->where('type', $args['type']));
@@ -203,7 +203,7 @@ final class AssistantTools
             handler: function (array $args): array {
                 $status = $args['status'] ?? 'open';
                 $query = FinancialAccount::query()
-                    ->with(['costCenter:id,uuid,name', 'category:id,uuid,name'])
+                    ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name'])
                     ->withSum('settlements', 'value')
                     ->where('type', AccountType::Payable);
 
@@ -238,7 +238,7 @@ final class AssistantTools
             handler: function (array $args): array {
                 $status = $args['status'] ?? 'open';
                 $query = FinancialAccount::query()
-                    ->with(['costCenter:id,uuid,name', 'category:id,uuid,name'])
+                    ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name'])
                     ->withSum('settlements', 'value')
                     ->where('type', AccountType::Receivable);
 
@@ -269,12 +269,12 @@ final class AssistantTools
             parameters: [
                 'from' => ['type' => 'string', 'description' => 'Data inicial (YYYY-MM-DD).'],
                 'to' => ['type' => 'string', 'description' => 'Data final (YYYY-MM-DD).'],
-                'cost_center_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
+                'bank_account_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
             ],
             handler: fn (array $args): array => $this->cashFlow->realized(
                 $args['from'] ?? null,
                 $args['to'] ?? null,
-                $args['cost_center_id'] ?? null,
+                $args['bank_account_id'] ?? null,
             ),
         );
     }
@@ -286,13 +286,13 @@ final class AssistantTools
             description: 'Fluxo de caixa projetado (previsão de saldo futuro com base em contas, parcelas e recorrências).',
             parameters: [
                 'days' => ['type' => 'integer', 'description' => 'Horizonte em dias (7, 15, 30, 60, 90, 180, 365).'],
-                'cost_center_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
+                'bank_account_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
             ],
             handler: fn (array $args): array => $this->cashFlow->projected(
                 null,
                 null,
                 min(max((int) ($args['days'] ?? 30), 1), 365),
-                $args['cost_center_id'] ?? null,
+                $args['bank_account_id'] ?? null,
             ),
         );
     }
@@ -344,7 +344,7 @@ final class AssistantTools
                 'type' => ['type' => 'string', 'enum' => ['payable', 'receivable'], 'description' => 'payable (despesa) ou receivable (receita).', 'required' => true],
                 'description' => ['type' => 'string', 'description' => 'Descrição do lançamento.', 'required' => true],
                 'counterparty' => ['type' => 'string', 'description' => 'Fornecedor ou cliente.'],
-                'cost_center_id' => ['type' => 'string', 'description' => 'UUID do centro de custo.', 'required' => true],
+                'bank_account_id' => ['type' => 'string', 'description' => 'UUID do centro de custo.', 'required' => true],
                 'category_id' => ['type' => 'string', 'description' => 'UUID da categoria.', 'required' => true],
                 'value' => ['type' => 'number', 'description' => 'Valor de cada ocorrência.', 'required' => true],
                 'frequency' => ['type' => 'string', 'enum' => ['daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'semiannual', 'annual'], 'description' => 'Frequência da recorrência.', 'required' => true],
@@ -382,13 +382,13 @@ final class AssistantTools
             description: 'Consulta a conciliação bancária: pendências, transações não conciliadas e transações ignoradas.',
             parameters: [
                 'status' => ['type' => 'string', 'enum' => ['pending', 'matched', 'ignored'], 'description' => 'Situação das transações do extrato.'],
-                'cost_center_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
+                'bank_account_id' => ['type' => 'string', 'description' => 'UUID opcional do centro de custo.'],
             ],
             handler: function (array $args): array {
                 $query = BankTransaction::query()->with('costCenter:id,uuid,name');
 
                 $query->when(isset($args['status']), fn ($q) => $q->where('status', $args['status']));
-                $query->when(isset($args['cost_center_id']), fn ($q) => $q->where('cost_center_id', $args['cost_center_id']));
+                $query->when(isset($args['bank_account_id']), fn ($q) => $q->where('bank_account_id', $args['bank_account_id']));
 
                 $transactions = $query->orderByDesc('date')->limit(100)->get();
 
@@ -471,7 +471,7 @@ final class AssistantTools
             'description' => ['type' => 'string', 'description' => 'Descrição do lançamento.', 'required' => true],
             'value' => ['type' => 'number', 'description' => 'Valor do lançamento (positivo).', 'required' => true],
             'due_date' => ['type' => 'string', 'description' => 'Data de vencimento (YYYY-MM-DD).', 'required' => true],
-            'cost_center_id' => ['type' => 'string', 'description' => 'UUID do centro de custo.', 'required' => true],
+            'bank_account_id' => ['type' => 'string', 'description' => 'UUID do centro de custo.', 'required' => true],
             'category_id' => ['type' => 'string', 'description' => 'UUID da categoria.', 'required' => true],
             'counterparty' => ['type' => 'string', 'description' => 'Fornecedor ou cliente (opcional).'],
             'observation' => ['type' => 'string', 'description' => 'Observação opcional.'],
@@ -489,7 +489,7 @@ final class AssistantTools
             'type' => $args['type'],
             'description' => $args['description'],
             'counterparty' => $args['counterparty'] ?? null,
-            'cost_center_id' => $args['cost_center_id'],
+            'bank_account_id' => $args['bank_account_id'],
             'category_id' => $args['category_id'],
             'value' => (float) $args['value'],
             'due_date' => $args['due_date'],
@@ -508,7 +508,7 @@ final class AssistantTools
             'type' => $args['type'],
             'description' => $args['description'],
             'counterparty' => $args['counterparty'] ?? null,
-            'cost_center_id' => $args['cost_center_id'],
+            'bank_account_id' => $args['bank_account_id'],
             'category_id' => $args['category_id'],
             'value' => (float) $args['value'],
             'frequency' => $args['frequency'],
@@ -556,32 +556,32 @@ final class AssistantTools
         ];
     }
 
-    private function currentBalance(?string $costCenterId): float
+    private function currentBalance(?string $bankAccountId): float
     {
-        $initial = (float) CostCenter::query()
-            ->when($costCenterId, fn ($q) => $q->where('uuid', $costCenterId))
+        $initial = (float) BankAccount::query()
+            ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
             ->sum('initial_balance');
 
-        return round($initial + $this->netSettled(now()->endOfDay(), $costCenterId), 2);
+        return round($initial + $this->netSettled(now()->endOfDay(), $bankAccountId), 2);
     }
 
-    private function settledBetween(Carbon $from, Carbon $to, AccountType $type, ?string $costCenterId): float
+    private function settledBetween(Carbon $from, Carbon $to, AccountType $type, ?string $bankAccountId): float
     {
         return round(
             (float) Settlement::query()
                 ->whereBetween('settled_at', [$from, $to])
                 ->whereHas('account', fn ($q) => $q->where('type', $type->value))
-                ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('cost_center_id', $costCenterId)))
+                ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
                 ->sum('value'),
             2,
         );
     }
 
-    private function netSettled(Carbon $upTo, ?string $costCenterId): float
+    private function netSettled(Carbon $upTo, ?string $bankAccountId): float
     {
         $base = fn () => Settlement::query()
             ->where('settled_at', '<=', $upTo)
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('cost_center_id', $costCenterId)));
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)));
 
         $in = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Receivable->value))->sum('value');
         $out = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Payable->value))->sum('value');

@@ -8,7 +8,7 @@ use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
 use App\Modules\CashFlow\Services\CashFlowService;
 use App\Modules\Category\Enums\CategoryType;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -25,14 +25,14 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function daily(?string $date = null, ?string $costCenterId = null): array
+    public function daily(?string $date = null, ?string $bankAccountId = null): array
     {
         $date = $date ? Carbon::parse($date) : now();
 
         $settlements = Settlement::query()
             ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name'])
             ->whereDate('settled_at', $date->toDateString())
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('cost_center_id', $costCenterId)))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->orderBy('settled_at')
             ->get();
 
@@ -53,7 +53,7 @@ class ReportService
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
+                    'bank_account' => $costCenter,
                     'payments' => [],
                     'receipts' => [],
                     'total_paid' => 0.0,
@@ -64,7 +64,7 @@ class ReportService
 
             $entry = [
                 'description' => $account->description,
-                'cost_center' => $account->costCenter?->name,
+                'bank_account' => $account->costCenter?->name,
                 'category' => $account->category?->name,
                 'value' => (float) $settlement->value,
             ];
@@ -100,7 +100,7 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function weekly(?string $from = null, ?string $to = null, ?string $costCenterId = null): array
+    public function weekly(?string $from = null, ?string $to = null, ?string $bankAccountId = null): array
     {
         $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfWeek();
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfWeek();
@@ -108,7 +108,7 @@ class ReportService
         $settlements = Settlement::query()
             ->with(['account.costCenter:id,uuid,name'])
             ->whereBetween('settled_at', [$from, $to])
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('cost_center_id', $costCenterId)))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         $totalPaid = 0.0;
@@ -126,7 +126,7 @@ class ReportService
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
+                    'bank_account' => $costCenter,
                     'total_paid' => 0.0,
                     'total_received' => 0.0,
                     'net_balance' => 0.0,
@@ -161,18 +161,18 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function provision(?string $from = null, ?string $to = null, int $days = 30, ?string $costCenterId = null): array
+    public function provision(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null): array
     {
         [$fromDate, $toDate] = $this->resolveProvisionPeriod($from, $to, $days);
-        $rawRows = $this->provisionRawRows($fromDate, $toDate, $costCenterId);
+        $rawRows = $this->provisionRawRows($fromDate, $toDate, $bankAccountId);
 
         return $this->buildProvisionMatrix($rawRows, $fromDate, $toDate);
     }
 
-    public function provisionExport(?string $from = null, ?string $to = null, int $days = 30, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function provisionExport(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->provision($from, $to, $days, $costCenterId);
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $data = $this->provision($from, $to, $days, $bankAccountId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         $fromLabel = Carbon::parse($data['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['to'])->format('d/m/Y');
@@ -200,7 +200,7 @@ class ReportService
             $row = $headerRow + 1;
 
             foreach ($data['groups'] as $group) {
-                $sheet->setCellValue("A{$row}", $group['cost_center']);
+                $sheet->setCellValue("A{$row}", $group['bank_account']);
                 $this->applyXlsxSectionBanner($sheet, $row, $columnCount);
                 $row++;
 
@@ -290,15 +290,15 @@ class ReportService
     /**
      * @return list<array<string, mixed>>
      */
-    private function provisionRawRows(Carbon $fromDate, Carbon $toDate, ?string $costCenterId): array
+    private function provisionRawRows(Carbon $fromDate, Carbon $toDate, ?string $bankAccountId): array
     {
         $base = fn () => FinancialAccount::query()
-            ->with(['costCenter:id,uuid,name'])
+            ->with(['bankAccount:id,uuid,name'])
             ->withSum('settlements', 'value')
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
             ->whereDate('due_date', '>=', $fromDate->toDateString())
             ->whereDate('due_date', '<=', $toDate->toDateString())
-            ->when($costCenterId, fn ($q) => $q->where('cost_center_id', $costCenterId));
+            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId));
 
         $futureAccounts = $base()->whereNull('recurrence_id')->whereNull('transfer_id')->whereNull('installment_group_id')->get();
         $installments = $base()->whereNotNull('installment_group_id')->get();
@@ -318,8 +318,8 @@ class ReportService
                 : round(-$remaining, 2);
 
             $rows[] = [
-                'cost_center_id' => $account->cost_center_id,
-                'cost_center_name' => $this->defaultCostCenterLabel($account->costCenter?->name),
+                'bank_account_id' => $account->bank_account_id,
+                'bank_account_name' => $this->defaultCostCenterLabel($account->costCenter?->name),
                 'account_id' => $account->uuid,
                 'account_description' => $account->description,
                 'due_date' => $account->due_date->toDateString(),
@@ -363,12 +363,12 @@ class ReportService
         $groupsMap = [];
 
         foreach ($rawRows as $row) {
-            $costCenter = $row['cost_center_name'];
+            $costCenter = $row['bank_account_name'];
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center_id' => $row['cost_center_id'],
-                    'cost_center' => $costCenter,
+                    'bank_account_id' => $row['bank_account_id'],
+                    'bank_account' => $costCenter,
                     'rows' => [],
                     'subtotal' => [
                         'amounts' => array_fill_keys($dayKeys, 0.0),
@@ -396,7 +396,7 @@ class ReportService
         }
 
         $groups = array_values($groupsMap);
-        usort($groups, fn (array $a, array $b): int => strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn (array $a, array $b): int => strcmp($a['bank_account'], $b['bank_account']));
 
         foreach ($groups as &$group) {
             usort($group['rows'], function (array $a, array $b): int {
@@ -462,7 +462,7 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function byCategory(?string $from = null, ?string $to = null, ?string $costCenterId = null): array
+    public function byCategory(?string $from = null, ?string $to = null, ?string $bankAccountId = null): array
     {
         $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
@@ -474,7 +474,7 @@ class ReportService
                 'account.costCenter:id,uuid,name',
             ])
             ->whereBetween('settled_at', [$from, $to])
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('cost_center_id', $costCenterId)))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         $expense = [];
@@ -499,7 +499,7 @@ class ReportService
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
+                    'bank_account' => $costCenter,
                     'expense' => [],
                     'total_expense' => 0.0,
                 ];
@@ -555,7 +555,7 @@ class ReportService
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
+                    'bank_account' => $costCenter,
                     'categories' => [],
                     'subtotal' => [
                         'amounts' => array_fill_keys($monthKeys, 0.0),
@@ -652,7 +652,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn (array $a, array $b): int => strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn (array $a, array $b): int => strcmp($a['bank_account'], $b['bank_account']));
 
         $grandAmounts = array_fill_keys($monthKeys, 0.0);
         $grandTotal = 0.0;
@@ -754,7 +754,7 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function monthlySummary(?string $from = null, ?string $to = null, ?string $costCenterId = null): array
+    public function monthlySummary(?string $from = null, ?string $to = null, ?string $bankAccountId = null): array
     {
         $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
@@ -763,13 +763,13 @@ class ReportService
 
         $rowsMap = [];
 
-        foreach (CostCenter::query()
-            ->when($costCenterId, fn ($q) => $q->where('uuid', $costCenterId))
+        foreach (BankAccount::query()
+            ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
             ->orderBy('name')
             ->get() as $costCenter) {
             $rowsMap[$costCenter->uuid] = [
-                'cost_center_id' => $costCenter->uuid,
-                'cost_center' => $costCenter->name,
+                'bank_account_id' => $costCenter->uuid,
+                'bank_account' => $costCenter->name,
                 'amounts' => array_fill_keys($monthKeys, 0.0),
                 'total' => 0.0,
             ];
@@ -778,7 +778,7 @@ class ReportService
         $settlements = Settlement::query()
             ->with(['account.category:id,uuid,name,type', 'account.costCenter:id,uuid,name'])
             ->whereBetween('settled_at', [$from, $to])
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('cost_center_id', $costCenterId)))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         foreach ($settlements as $settlement) {
@@ -795,12 +795,12 @@ class ReportService
                 continue;
             }
 
-            $rowKey = $account->cost_center_id ?? '__none__';
+            $rowKey = $account->bank_account_id ?? '__none__';
 
             if (! isset($rowsMap[$rowKey])) {
                 $rowsMap[$rowKey] = [
-                    'cost_center_id' => $account->cost_center_id,
-                    'cost_center' => $this->defaultCostCenterLabel($account->costCenter?->name),
+                    'bank_account_id' => $account->bank_account_id,
+                    'bank_account' => $this->defaultCostCenterLabel($account->costCenter?->name),
                     'amounts' => array_fill_keys($monthKeys, 0.0),
                     'total' => 0.0,
                 ];
@@ -812,7 +812,7 @@ class ReportService
         }
 
         $rows = array_values($rowsMap);
-        usort($rows, fn (array $a, array $b): int => $b['total'] <=> $a['total'] ?: strcmp($a['cost_center'], $b['cost_center']));
+        usort($rows, fn (array $a, array $b): int => $b['total'] <=> $a['total'] ?: strcmp($a['bank_account'], $b['bank_account']));
 
         $grandAmounts = array_fill_keys($monthKeys, 0.0);
         $grandTotal = 0.0;
@@ -849,10 +849,10 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function byCostCenter(?string $costCenterId = null): array
+    public function byCostCenter(?string $bankAccountId = null): array
     {
-        $costCenters = CostCenter::query()
-            ->when($costCenterId, fn ($q) => $q->where('uuid', $costCenterId))
+        $costCenters = BankAccount::query()
+            ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
             ->orderBy('name')
             ->get();
 
@@ -860,16 +860,16 @@ class ReportService
 
         foreach ($costCenters as $costCenter) {
             $income = (float) Settlement::query()
-                ->whereHas('account', fn ($q) => $q->where('cost_center_id', $costCenter->uuid)->where('type', AccountType::Receivable->value))
+                ->whereHas('account', fn ($q) => $q->where('bank_account_id', $costCenter->uuid)->where('type', AccountType::Receivable->value))
                 ->sum('value');
 
             $expense = (float) Settlement::query()
-                ->whereHas('account', fn ($q) => $q->where('cost_center_id', $costCenter->uuid)->where('type', AccountType::Payable->value))
+                ->whereHas('account', fn ($q) => $q->where('bank_account_id', $costCenter->uuid)->where('type', AccountType::Payable->value))
                 ->sum('value');
 
             $rows[] = [
-                'cost_center_id' => $costCenter->uuid,
-                'cost_center' => $costCenter->name,
+                'bank_account_id' => $costCenter->uuid,
+                'bank_account' => $costCenter->name,
                 'initial_balance' => (float) $costCenter->initial_balance,
                 'income' => round($income, 2),
                 'expense' => round($expense, 2),
@@ -885,16 +885,16 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function cashFlow(?string $from = null, ?string $to = null, int $days = 30, ?string $costCenterId = null): array
+    public function cashFlow(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null): array
     {
-        $realized = $this->cashFlow->realized($from, $to, $costCenterId, null);
-        $projected = $this->cashFlow->projected(null, null, $days, $costCenterId);
+        $realized = $this->cashFlow->realized($from, $to, $bankAccountId, null);
+        $projected = $this->cashFlow->projected(null, null, $days, $bankAccountId);
 
         $groups = [];
 
-        if ($costCenterId) {
+        if ($bankAccountId) {
             $groups[] = [
-                'cost_center' => $this->resolveCostCenterLabel($costCenterId),
+                'bank_account' => $this->resolveCostCenterLabel($bankAccountId),
                 'realized_net' => round($realized['total_in'] - $realized['total_out'], 2),
                 'projected_net' => round($projected['total_in'] - $projected['total_out'], 2),
                 'expected_final_balance' => round($realized['final_balance'] + $projected['total_in'] - $projected['total_out'], 2),
@@ -935,7 +935,7 @@ class ReportService
      *
      * @return array<string, mixed>
      */
-    public function payables(?string $from = null, ?string $to = null, ?string $costCenterId = null): array
+    public function payables(?string $from = null, ?string $to = null, ?string $bankAccountId = null): array
     {
         $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
@@ -943,11 +943,11 @@ class ReportService
         $todayString = $today->toDateString();
 
         $accounts = FinancialAccount::query()
-            ->with(['costCenter:id,uuid,name', 'category:id,uuid,name'])
+            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name'])
             ->withSum('settlements', 'value')
             ->where('type', AccountType::Payable)
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-            ->when($costCenterId, fn ($q) => $q->where('cost_center_id', $costCenterId))
+            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->whereDate('due_date', '<=', $to->toDateString())
             ->when($from, fn ($q) => $q->where(function ($inner) use ($from, $today): void {
                 $inner->whereDate('due_date', '>=', $from->toDateString())
@@ -975,8 +975,8 @@ class ReportService
                 'id' => $account->uuid,
                 'description' => $account->description,
                 'counterparty' => $account->counterparty,
-                'cost_center_id' => $account->cost_center_id,
-                'cost_center' => $account->costCenter?->name,
+                'bank_account_id' => $account->bank_account_id,
+                'bank_account' => $account->costCenter?->name,
                 'category' => $account->category?->name,
                 'value' => (float) $account->value,
                 'remaining_amount' => $remaining,
@@ -998,8 +998,8 @@ class ReportService
             'reference_date' => $todayString,
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
-            'cost_center_id' => $costCenterId,
-            'cost_center' => $costCenterId ? CostCenter::query()->where('uuid', $costCenterId)->value('name') : null,
+            'bank_account_id' => $bankAccountId,
+            'bank_account' => $bankAccountId ? BankAccount::query()->where('uuid', $bankAccountId)->value('name') : null,
             'accounts' => $rows,
             'groups' => $this->payablesListingGroups($rows),
             'total_open' => round($totalOpen, 2),
@@ -1012,15 +1012,15 @@ class ReportService
      * @param  list<string>  $selectedIds
      * @return array<string, mixed>
      */
-    public function payablesExport(?string $from = null, ?string $to = null, ?string $costCenterId = null, array $selectedIds = []): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function payablesExport(?string $from = null, ?string $to = null, ?string $bankAccountId = null, array $selectedIds = []): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->payables($from, $to, $costCenterId);
+        $data = $this->payables($from, $to, $bankAccountId);
         $exportGroups = $this->buildPayablesExportGroups($data['accounts'], $selectedIds, $data['reference_date']);
         $summary = $this->buildPayablesSummary($exportGroups, $data['reference_date']);
         $fromLabel = Carbon::parse($data['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['to'])->format('d/m/Y');
         $referenceLabel = Carbon::parse($data['reference_date'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         return $this->streamXlsx('contas-a-pagar.xlsx', 'Contas a pagar', function (Worksheet $sheet) use ($exportGroups, $summary, $fromLabel, $toLabel, $referenceLabel, $costCenterLabel): void {
             $row = $this->applyXlsxTitleBlock(
@@ -1035,7 +1035,7 @@ class ReportService
             $columnCount = 3;
 
             foreach ($exportGroups as $group) {
-                $sheet->setCellValue("A{$row}", $group['cost_center']);
+                $sheet->setCellValue("A{$row}", $group['bank_account']);
                 $this->applyXlsxSectionBanner($sheet, $row, $columnCount);
                 $row++;
 
@@ -1125,7 +1125,7 @@ class ReportService
 
                 foreach ($summaryBlock['data']['rows'] as $summaryRow) {
                     $sheet->fromArray([
-                        $summaryRow['cost_center'],
+                        $summaryRow['bank_account'],
                         $this->xlsxMoney($summaryRow['amount']),
                     ], null, "A{$row}");
                     $row++;
@@ -1170,12 +1170,12 @@ class ReportService
         $groupsMap = [];
 
         foreach ($accounts as $account) {
-            $costCenter = $this->defaultCostCenterLabel($account['cost_center'] ?? null);
+            $costCenter = $this->defaultCostCenterLabel($account['bank_account'] ?? null);
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
-                    'cost_center_id' => $account['cost_center_id'] ?? null,
+                    'bank_account' => $costCenter,
+                    'bank_account_id' => $account['bank_account_id'] ?? null,
                     'accounts' => [],
                     'total_open' => 0.0,
                     'total_overdue' => 0.0,
@@ -1198,7 +1198,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn (array $a, array $b): int => strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn (array $a, array $b): int => strcmp($a['bank_account'], $b['bank_account']));
 
         return $groups;
     }
@@ -1214,12 +1214,12 @@ class ReportService
         $groupsMap = [];
 
         foreach ($accounts as $account) {
-            $costCenter = $this->defaultCostCenterLabel($account['cost_center'] ?? null);
+            $costCenter = $this->defaultCostCenterLabel($account['bank_account'] ?? null);
 
             if (! isset($groupsMap[$costCenter])) {
                 $groupsMap[$costCenter] = [
-                    'cost_center' => $costCenter,
-                    'cost_center_id' => $account['cost_center_id'] ?? null,
+                    'bank_account' => $costCenter,
+                    'bank_account_id' => $account['bank_account_id'] ?? null,
                     'overdue' => [
                         'accounts' => [],
                         'total' => 0.0,
@@ -1263,7 +1263,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn (array $a, array $b): int => strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn (array $a, array $b): int => strcmp($a['bank_account'], $b['bank_account']));
 
         return $groups;
     }
@@ -1281,11 +1281,11 @@ class ReportService
 
         foreach ($groups as $group) {
             $paidRows[] = [
-                'cost_center' => $group['cost_center'],
+                'bank_account' => $group['bank_account'],
                 'amount' => $group['total_paid_today'],
             ];
             $overdueRows[] = [
-                'cost_center' => $group['cost_center'],
+                'bank_account' => $group['bank_account'],
                 'amount' => $group['total_overdue'],
             ];
             $totalPaid += (float) $group['total_paid_today'];
@@ -1327,7 +1327,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn ($a, $b) => strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn ($a, $b) => strcmp($a['bank_account'], $b['bank_account']));
 
         return $groups;
     }
@@ -1347,7 +1347,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn ($a, $b) => $b['total_paid'] <=> $a['total_paid'] ?: strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn ($a, $b) => $b['total_paid'] <=> $a['total_paid'] ?: strcmp($a['bank_account'], $b['bank_account']));
 
         return $groups;
     }
@@ -1366,7 +1366,7 @@ class ReportService
             $groups[] = $group;
         }
 
-        usort($groups, fn ($a, $b) => $b['total_expense'] <=> $a['total_expense'] ?: strcmp($a['cost_center'], $b['cost_center']));
+        usort($groups, fn ($a, $b) => $b['total_expense'] <=> $a['total_expense'] ?: strcmp($a['bank_account'], $b['bank_account']));
 
         return $groups;
     }
@@ -1378,12 +1378,12 @@ class ReportService
     {
         $groups = [];
 
-        foreach (CostCenter::query()->orderBy('name')->get() as $costCenter) {
+        foreach (BankAccount::query()->orderBy('name')->get() as $costCenter) {
             $realized = $this->cashFlow->realized($from, $to, $costCenter->uuid, null);
             $projected = $this->cashFlow->projected(null, null, $days, $costCenter->uuid);
 
             $groups[] = [
-                'cost_center' => $costCenter->name,
+                'bank_account' => $costCenter->name,
                 'realized_net' => round($realized['total_in'] - $realized['total_out'], 2),
                 'projected_net' => round($projected['total_in'] - $projected['total_out'], 2),
                 'expected_final_balance' => round($realized['final_balance'] + $projected['total_in'] - $projected['total_out'], 2),
@@ -1412,13 +1412,13 @@ class ReportService
         return $list;
     }
 
-    private function resolveCostCenterLabel(?string $costCenterId): string
+    private function resolveCostCenterLabel(?string $bankAccountId): string
     {
-        if ($costCenterId === null || $costCenterId === '') {
+        if ($bankAccountId === null || $bankAccountId === '') {
             return 'Todos os centros';
         }
 
-        return CostCenter::query()->where('uuid', $costCenterId)->value('name') ?? 'Centro de custo';
+        return BankAccount::query()->where('uuid', $bankAccountId)->value('name') ?? 'Centro de custo';
     }
 
     /**
@@ -1440,11 +1440,11 @@ class ReportService
         ]);
     }
 
-    public function dailyExport(?string $date = null, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function dailyExport(?string $date = null, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->daily($date, $costCenterId);
+        $data = $this->daily($date, $bankAccountId);
         $dateLabel = Carbon::parse($data['date'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         return $this->streamXlsx('relatorio-diario.xlsx', 'Diário', function (Worksheet $sheet) use ($data, $dateLabel, $costCenterLabel): void {
             $row = $this->applyXlsxTitleBlock(
@@ -1458,7 +1458,7 @@ class ReportService
             $columnCount = 3;
 
             foreach ($data['groups'] as $group) {
-                $sheet->setCellValue("A{$row}", $group['cost_center']);
+                $sheet->setCellValue("A{$row}", $group['bank_account']);
                 $this->applyXlsxSectionBanner($sheet, $row, $columnCount);
                 $row++;
 
@@ -1521,12 +1521,12 @@ class ReportService
         });
     }
 
-    public function weeklyExport(?string $from = null, ?string $to = null, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function weeklyExport(?string $from = null, ?string $to = null, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->weekly($from, $to, $costCenterId);
+        $data = $this->weekly($from, $to, $bankAccountId);
         $fromLabel = Carbon::parse($data['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['to'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         return $this->streamXlsx('relatorio-semanal.xlsx', 'Semanal', function (Worksheet $sheet) use ($data, $fromLabel, $toLabel, $costCenterLabel): void {
             $headerRow = $this->applyXlsxTitleBlock(
@@ -1546,7 +1546,7 @@ class ReportService
 
             foreach ($data['groups'] as $group) {
                 $sheet->fromArray([
-                    $group['cost_center'],
+                    $group['bank_account'],
                     $this->xlsxMoney($group['total_paid']),
                     $this->xlsxMoney($group['total_received']),
                     $this->xlsxMoney($group['net_balance']),
@@ -1578,13 +1578,13 @@ class ReportService
         });
     }
 
-    public function byCategoryExport(?string $from = null, ?string $to = null, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function byCategoryExport(?string $from = null, ?string $to = null, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->byCategory($from, $to, $costCenterId);
+        $data = $this->byCategory($from, $to, $bankAccountId);
         $matrix = $data['matrix'];
         $fromLabel = Carbon::parse($data['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['to'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
         $columnKeys = array_column($matrix['columns'], 'key');
         $columnLabels = array_column($matrix['columns'], 'label');
 
@@ -1611,7 +1611,7 @@ class ReportService
             $dataStartRow = $row;
 
             foreach ($matrix['groups'] as $group) {
-                $sheet->setCellValue("A{$row}", $group['cost_center']);
+                $sheet->setCellValue("A{$row}", $group['bank_account']);
                 $this->applyXlsxSectionBanner($sheet, $row, $columnCount);
                 $row++;
 
@@ -1643,7 +1643,7 @@ class ReportService
                     }
                 }
 
-                $sheet->setCellValue("A{$row}", "{$group['cost_center']} - Totais");
+                $sheet->setCellValue("A{$row}", "{$group['bank_account']} - Totais");
                 $groupTotalCells = [];
 
                 foreach ($columnKeys as $key) {
@@ -1687,12 +1687,12 @@ class ReportService
         });
     }
 
-    public function monthlySummaryExport(?string $from = null, ?string $to = null, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function monthlySummaryExport(?string $from = null, ?string $to = null, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->monthlySummary($from, $to, $costCenterId);
+        $data = $this->monthlySummary($from, $to, $bankAccountId);
         $fromLabel = Carbon::parse($data['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['to'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
         $columnKeys = array_column($data['columns'], 'key');
         $columnLabels = array_column($data['columns'], 'label');
 
@@ -1721,7 +1721,7 @@ class ReportService
             $dataStartRow = $row;
 
             foreach ($data['rows'] as $item) {
-                $cells = [$item['cost_center']];
+                $cells = [$item['bank_account']];
 
                 foreach ($columnKeys as $key) {
                     $cells[] = $this->xlsxMoney($item['amounts'][$key] ?? null);
@@ -2024,10 +2024,10 @@ class ReportService
         $this->applyXlsxColumnWidths($sheet, $columnCount);
     }
 
-    public function byCostCenterExport(?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function byCostCenterExport(?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->byCostCenter($costCenterId);
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $data = $this->byCostCenter($bankAccountId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         return $this->streamXlsx('relatorio-por-centro-de-custo.xlsx', 'Centros de custo', function (Worksheet $sheet) use ($data, $costCenterLabel): void {
             $headerRow = $this->applyXlsxTitleBlock(
@@ -2044,7 +2044,7 @@ class ReportService
 
             foreach ($data['rows'] as $item) {
                 $sheet->fromArray([
-                    $item['cost_center'],
+                    $item['bank_account'],
                     $this->xlsxMoney($item['initial_balance']),
                     $this->xlsxMoney($item['income']),
                     $this->xlsxMoney($item['expense']),
@@ -2066,12 +2066,12 @@ class ReportService
         });
     }
 
-    public function cashFlowExport(?string $from = null, ?string $to = null, int $days = 30, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function cashFlowExport(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $data = $this->cashFlow($from, $to, $days, $costCenterId);
+        $data = $this->cashFlow($from, $to, $days, $bankAccountId);
         $fromLabel = Carbon::parse($data['realized']['from'])->format('d/m/Y');
         $toLabel = Carbon::parse($data['realized']['to'])->format('d/m/Y');
-        $costCenterLabel = $this->resolveCostCenterLabel($costCenterId);
+        $costCenterLabel = $this->resolveCostCenterLabel($bankAccountId);
 
         return $this->streamXlsx('demonstrativo-fluxo-caixa.xlsx', 'Demonstrativo', function (Worksheet $sheet) use ($data, $fromLabel, $toLabel, $costCenterLabel, $days): void {
             $headerRow = $this->applyXlsxTitleBlock(
@@ -2091,7 +2091,7 @@ class ReportService
 
             foreach ($data['groups'] as $group) {
                 $sheet->fromArray([
-                    $group['cost_center'],
+                    $group['bank_account'],
                     $this->xlsxMoney($group['realized_net']),
                     $this->xlsxMoney($group['projected_net']),
                     $this->xlsxMoney($group['expected_final_balance']),

@@ -47,9 +47,9 @@ export function MonthlySummaryTable({ data, compact = false, className }: Monthl
           </thead>
           <tbody>
             {data.rows.map((row) => (
-              <tr key={row.cost_center_id ?? row.cost_center} className="border-b border-surface-3/60">
+              <tr key={row.bank_account_id ?? row.bank_account} className="border-b border-surface-3/60">
                 <td className={cn('sticky left-0 z-10 bg-background font-semibold text-foreground', labelColumnClass, cellClass)}>
-                  {row.cost_center}
+                  {row.bank_account}
                 </td>
                 {data.columns.map((column) => {
                   const value = row.amounts[column.key]

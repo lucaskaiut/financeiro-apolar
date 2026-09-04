@@ -62,7 +62,7 @@ class ImportAccountsJob implements ShouldQueue
             $tempPath = $this->writeTempFile($record->filename, $record->content);
             $file = new UploadedFile($tempPath, $record->filename, null, null, true);
 
-            $imports->importXlsx($file, $record->cost_center_id, $user);
+            $imports->importXlsx($file, $record->bank_account_id, $user);
         } finally {
             if ($tempPath !== null && file_exists($tempPath)) {
                 @unlink($tempPath);

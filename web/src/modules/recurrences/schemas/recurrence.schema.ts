@@ -4,7 +4,7 @@ export const recurrenceSchema = z.object({
   type: z.enum(['payable', 'receivable']),
   description: z.string().min(1, 'Informe a descrição'),
   counterparty: z.string(),
-  cost_center_id: z.string().min(1, 'Selecione o centro de custo'),
+  bank_account_id: z.string().min(1, 'Selecione o conta bancária'),
   category_id: z.string().min(1, 'Selecione a categoria'),
   subcategory_id: z.string(),
   value: z.string().refine((v) => v !== '' && Number(v) > 0, 'Informe um valor maior que zero'),

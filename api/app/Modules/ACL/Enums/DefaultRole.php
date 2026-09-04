@@ -55,9 +55,18 @@ enum DefaultRole: string
     private static function operational(): array
     {
         return [
+            Permission::BANK_ACCOUNTS_CREATE,
+            Permission::BANK_ACCOUNTS_UPDATE,
+            Permission::BANK_ACCOUNTS_DELETE,
             Permission::COST_CENTERS_CREATE,
             Permission::COST_CENTERS_UPDATE,
             Permission::COST_CENTERS_DELETE,
+            Permission::COMPANIES_CREATE,
+            Permission::COMPANIES_UPDATE,
+            Permission::COMPANIES_DELETE,
+            Permission::CREDIT_CARDS_CREATE,
+            Permission::CREDIT_CARDS_UPDATE,
+            Permission::CREDIT_CARDS_DELETE,
             Permission::CATEGORIES_CREATE,
             Permission::CATEGORIES_UPDATE,
             Permission::CATEGORIES_DELETE,

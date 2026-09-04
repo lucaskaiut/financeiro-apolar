@@ -5,7 +5,7 @@ namespace App\Modules\CashFlow\Services;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -14,21 +14,21 @@ class CashFlowService
     /**
      * @return array<string, mixed>
      */
-    public function realized(?string $from = null, ?string $to = null, ?string $costCenterId = null, ?string $categoryId = null): array
+    public function realized(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $categoryId = null): array
     {
         $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
         $toDate = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
 
         $openingBalance = round(
-            $this->initialBalance($costCenterId)
-            + $this->netSettled($fromDate->copy()->subSecond(), $costCenterId, $categoryId),
+            $this->initialBalance($bankAccountId)
+            + $this->netSettled($fromDate->copy()->subSecond(), $bankAccountId, $categoryId),
             2,
         );
 
         $settlements = Settlement::query()
             ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name,type'])
             ->whereBetween('settled_at', [$fromDate, $toDate])
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('cost_center_id', $costCenterId)))
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
             ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
             ->orderBy('settled_at')
             ->get();
@@ -57,7 +57,7 @@ class CashFlowService
                 'id' => $settlement->uuid,
                 'date' => $settlement->settled_at?->toDateString(),
                 'description' => $account->description,
-                'cost_center' => $account->costCenter?->name,
+                'bank_account' => $account->costCenter?->name,
                 'category' => $account->category?->name,
                 'direction' => $isIn ? 'in' : 'out',
                 'value' => $value,
@@ -79,7 +79,7 @@ class CashFlowService
     /**
      * @return array<string, mixed>
      */
-    public function projected(?string $from = null, ?string $to = null, int $days = 30, ?string $costCenterId = null, ?AccountType $accountType = null): array
+    public function projected(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null, ?AccountType $accountType = null): array
     {
         if ($from !== null || $to !== null) {
             $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->startOfDay();
@@ -102,12 +102,12 @@ class CashFlowService
         }
 
         $base = fn () => FinancialAccount::query()
-            ->with(['costCenter:id,uuid,name', 'category:id,uuid,name,type'])
+            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type'])
             ->withSum('settlements', 'value')
             ->whereIn('status', ['open', 'partial'])
             ->whereDate('due_date', '>=', $fromDate->toDateString())
             ->whereDate('due_date', '<=', $toDate->toDateString())
-            ->when($costCenterId, fn ($q) => $q->where('cost_center_id', $costCenterId))
+            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->when($accountType, fn ($q) => $q->where('type', $accountType));
 
         $futureAccounts = $base()->whereNull('recurrence_id')->whereNull('transfer_id')->whereNull('installment_group_id')->get();
@@ -123,7 +123,7 @@ class CashFlowService
                 'out' => round($items->where('type', AccountType::Payable)->sum('remaining_amount'), 2),
             ]);
 
-        $balance = $this->currentBalance($costCenterId);
+        $balance = $this->currentBalance($bankAccountId);
         $series = [];
 
         for ($i = 0; $i <= $periodDays; $i++) {
@@ -142,7 +142,7 @@ class CashFlowService
         return [
             'from' => $fromDate->toDateString(),
             'to' => $toDate->toDateString(),
-            'opening_balance' => $this->currentBalance($costCenterId),
+            'opening_balance' => $this->currentBalance($bankAccountId),
             'days' => $periodDays,
             'total_in' => round($all->where('type', AccountType::Receivable)->sum('remaining_amount'), 2),
             'total_out' => round($all->where('type', AccountType::Payable)->sum('remaining_amount'), 2),
@@ -163,7 +163,7 @@ class CashFlowService
             'id' => $account->uuid,
             'description' => $account->description,
             'counterparty' => $account->counterparty,
-            'cost_center' => $account->costCenter?->name,
+            'bank_account' => $account->costCenter?->name,
             'category' => $account->category?->name,
             'direction' => $account->type === AccountType::Receivable ? 'in' : 'out',
             'value' => (float) $account->value,
@@ -173,26 +173,31 @@ class CashFlowService
         ])->values()->all();
     }
 
-    private function initialBalance(?string $costCenterId): float
+    private function initialBalance(?string $bankAccountId): float
     {
-        $balance = CostCenter::query()
-            ->when($costCenterId, fn ($q) => $q->where('uuid', $costCenterId))
+        $balance = BankAccount::query()
+            ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
             ->sum('initial_balance');
 
         return (float) $balance;
     }
 
-    private function currentBalance(?string $costCenterId): float
+    private function currentBalance(?string $bankAccountId): float
     {
-        return round($this->initialBalance($costCenterId) + $this->netSettled(now()->endOfDay(), $costCenterId, null), 2);
+        return round($this->initialBalance($bankAccountId) + $this->netSettled(now()->endOfDay(), $bankAccountId, null), 2);
     }
 
-    private function netSettled(Carbon $upTo, ?string $costCenterId, ?string $categoryId): float
+    private function netSettled(Carbon $upTo, ?string $bankAccountId, ?string $categoryId): float
     {
         $base = fn () => Settlement::query()
             ->where('settled_at', '<=', $upTo)
-            ->when($costCenterId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('cost_center_id', $costCenterId)))
-            ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)));
+            ->where('method', '!=', 'credit_card_invoice')
+            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
+            ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
+            ->whereHas('account', fn ($a) => $a->where(function ($query): void {
+                $query->where('is_card_purchase', false)
+                    ->orWhere('is_card_invoice_payable', true);
+            }));
 
         $in = (float) $base()->whereHas('account', fn ($a) => $a->where('type', AccountType::Receivable->value))->sum('value');
         $out = (float) $base()->whereHas('account', fn ($a) => $a->where('type', AccountType::Payable->value))->sum('value');

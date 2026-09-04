@@ -50,12 +50,28 @@ export interface Session {
 export interface CostCenter {
   id: string
   name: string
+  status: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface BankAccount {
+  id: string
+  name: string
   bank: string | null
   agency: string | null
   account: string | null
   type: string
   type_label: string
   initial_balance: number
+  status: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface Company {
+  id: string
+  name: string
   status: string
   created_at: string | null
   updated_at: string | null
@@ -73,6 +89,19 @@ export interface Category {
   subcategories_count?: number | null
   created_at: string | null
   updated_at: string | null
+}
+
+export interface AccountAllocation {
+  id?: string
+  cost_center_id: string | null
+  cost_center?: string | null
+  company_id: string | null
+  company?: string | null
+  category_id: string | null
+  category?: string | null
+  subcategory_id?: string | null
+  value: number
+  percentage: number | null
 }
 
 export interface Settlement {
@@ -97,8 +126,19 @@ export interface Account {
   type_label: string
   description: string
   counterparty: string | null
+  bank_account_id: string | null
+  bank_account: string | null
+  company_id: string | null
+  company: string | null
   cost_center_id: string | null
   cost_center: string | null
+  credit_card_id: string | null
+  credit_card: string | null
+  credit_card_invoice_id?: string | null
+  is_card_purchase?: boolean
+  is_card_invoice_payable?: boolean
+  allocation_mode?: string | null
+  allocations?: AccountAllocation[]
   category_id: string | null
   category: { name: string; color: string | null; type: string } | null
   subcategory_id: string | null
@@ -128,8 +168,8 @@ export interface Recurrence {
   type: string
   description: string
   counterparty: string | null
-  cost_center_id: string | null
-  cost_center: string | null
+  bank_account_id: string | null
+  bank_account: string | null
   category_id: string | null
   category: string | null
   subcategory_id: string | null
@@ -149,10 +189,10 @@ export interface Recurrence {
 
 export interface Transfer {
   id: string
-  from_cost_center_id: string | null
-  from_cost_center: string | null
-  to_cost_center_id: string | null
-  to_cost_center: string | null
+  from_bank_account_id: string | null
+  from_bank_account: string | null
+  to_bank_account_id: string | null
+  to_bank_account: string | null
   value: number
   date: string
   description: string | null
@@ -161,8 +201,8 @@ export interface Transfer {
 
 export interface BankTransaction {
   id: string
-  cost_center_id: string | null
-  cost_center: string | null
+  bank_account_id: string | null
+  bank_account: string | null
   date: string
   value: number
   type: 'credit' | 'debit' | 'other'
@@ -170,6 +210,34 @@ export interface BankTransaction {
   transaction_id: string | null
   status: 'pending' | 'matched' | 'ignored'
   matched_account?: { uuid: string; description: string } | null
+  created_at: string | null
+}
+
+export interface CreditCard {
+  id: string
+  name: string
+  institution: string | null
+  limit: number | null
+  closing_day: number | null
+  due_day: number | null
+  bank_account_id: string | null
+  bank_account?: string | null
+  status: string
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface CreditCardInvoice {
+  id: string
+  credit_card_id: string
+  reference_month: string
+  closing_date: string | null
+  due_date: string | null
+  total_value: number
+  status: string
+  status_label: string
+  financial_account_id?: string | null
+  purchases_count?: number
   created_at: string | null
 }
 
@@ -220,4 +288,3 @@ export interface AiSettings {
   has_api_key: boolean
   configured: boolean
 }
-

@@ -11,7 +11,7 @@ export default function CostCenterCreatePage() {
     <Page>
       <PageHeader
         title="Novo centro de custo"
-        description="Cadastre uma conta bancária operacional."
+        description="Cadastre um centro de custo para classificação financeira."
         breadcrumb={[
           { label: 'Dashboard', to: '/dashboard' },
           { label: 'Centros de custo', to: '/cost-centers' },

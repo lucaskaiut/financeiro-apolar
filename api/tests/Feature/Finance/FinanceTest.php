@@ -17,9 +17,9 @@ class FinanceTest extends TestCase
     use InteractsWithTenants;
     use RefreshDatabase;
 
-    private function createCostCenter(): string
+    private function createBankAccount(): string
     {
-        $response = $this->postJson('/api/cost-centers', [
+        $response = $this->postJson('/api/bank-accounts', [
             'name' => 'Banco Principal',
             'bank' => 'Banco do Brasil',
             'agency' => '0001',
@@ -30,6 +30,22 @@ class FinanceTest extends TestCase
         ])->assertCreated();
 
         return $response->json('data.id');
+    }
+
+    private function createCostCenter(string $name = 'Obra A'): string
+    {
+        return $this->postJson('/api/cost-centers', [
+            'name' => $name,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+    }
+
+    private function createCompany(string $name = 'Imobiliária'): string
+    {
+        return $this->postJson('/api/companies', [
+            'name' => $name,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
     }
 
     private function createCategory(string $type = 'expense'): string
@@ -49,12 +65,12 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
 
-        $this->getJson('/api/cost-centers')->assertOk()->assertJsonPath('meta.total', 1);
-        $this->getJson("/api/cost-centers/{$costCenterId}")->assertOk()->assertJsonPath('data.name', 'Banco Principal');
+        $this->getJson('/api/bank-accounts')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson("/api/bank-accounts/{$costCenterId}")->assertOk()->assertJsonPath('data.name', 'Banco Principal');
 
-        $this->putJson("/api/cost-centers/{$costCenterId}", ['name' => 'Banco Renomeado'])
+        $this->putJson("/api/bank-accounts/{$costCenterId}", ['name' => 'Banco Renomeado'])
             ->assertOk()
             ->assertJsonPath('data.name', 'Banco Renomeado');
 
@@ -64,7 +80,7 @@ class FinanceTest extends TestCase
         $this->putJson("/api/categories/{$categoryId}", ['name' => 'Clientes'])->assertOk()->assertJsonPath('data.name', 'Clientes');
 
         $this->deleteJson("/api/categories/{$categoryId}")->assertOk();
-        $this->deleteJson("/api/cost-centers/{$costCenterId}")->assertOk();
+        $this->deleteJson("/api/bank-accounts/{$costCenterId}")->assertOk();
     }
 
     public function test_account_create_and_installment_generation(): void
@@ -72,14 +88,14 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $response = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Compra de equipamentos',
             'counterparty' => 'Fornecedor X',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 1200,
             'due_date' => '2026-01-10',
@@ -104,13 +120,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Aluguel',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-02-01',
@@ -141,13 +157,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Aluguel',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-02-01',
@@ -171,13 +187,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountA = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Conta A',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 100,
             'due_date' => '2026-03-01',
@@ -186,7 +202,7 @@ class FinanceTest extends TestCase
         $accountB = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Conta B',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 200,
             'due_date' => '2026-03-01',
@@ -211,13 +227,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $overdueId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Conta vencida',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 150,
             'due_date' => now()->subDays(5)->toDateString(),
@@ -226,7 +242,7 @@ class FinanceTest extends TestCase
         $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Conta futura',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 250,
             'due_date' => now()->addDays(5)->toDateString(),
@@ -243,13 +259,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('income');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'receivable',
             'description' => 'Venda',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 100,
             'due_date' => '2026-05-01',
@@ -274,13 +290,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Fornecedor',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 1000,
             'due_date' => '2026-06-01',
@@ -304,13 +320,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Aluguel',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-07-01',
@@ -342,13 +358,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Fatura',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-03-01',
@@ -364,13 +380,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Energia',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 500,
             'due_date' => '2026-03-01',
@@ -398,13 +414,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $this->postJson('/api/recurrences', [
             'type' => 'payable',
             'description' => 'Internet',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 200,
             'frequency' => 'monthly',
@@ -425,8 +441,8 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $fromId = $this->createCostCenter();
-        $toId = $this->postJson('/api/cost-centers', [
+        $fromId = $this->createBankAccount();
+        $toId = $this->postJson('/api/bank-accounts', [
             'name' => 'Banco B',
             'type' => 'checking',
             'initial_balance' => 0,
@@ -434,8 +450,8 @@ class FinanceTest extends TestCase
         ])->json('data.id');
 
         $this->postJson('/api/transfers', [
-            'from_cost_center_id' => $fromId,
-            'to_cost_center_id' => $toId,
+            'from_bank_account_id' => $fromId,
+            'to_bank_account_id' => $toId,
             'value' => 5000,
             'date' => '2026-01-15',
         ])->assertCreated();
@@ -452,13 +468,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'receivable',
             'description' => 'Venda',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 800,
             'due_date' => '2026-04-01',
@@ -493,13 +509,13 @@ class FinanceTest extends TestCase
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Internet',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 200,
             'due_date' => '2026-08-10',
@@ -529,7 +545,7 @@ VERSION:102
 OFX;
 
         $this->postJson('/api/reconciliation/import', [
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'content' => $ofx,
         ])->assertOk()->assertJsonPath('data.imported', 1);
 
@@ -563,13 +579,13 @@ OFX;
             $tenant = $this->createTenantWithRoles();
             Sanctum::actingAs($this->createAdmin($tenant));
 
-            $costCenterId = $this->createCostCenter();
+            $costCenterId = $this->createBankAccount();
             $categoryId = $this->createCategory('expense');
 
             $dueTodayId = $this->postJson('/api/accounts', [
                 'type' => 'payable',
                 'description' => 'Conta do dia',
-                'cost_center_id' => $costCenterId,
+                'bank_account_id' => $costCenterId,
                 'category_id' => $categoryId,
                 'value' => 500,
                 'due_date' => '2026-09-01',
@@ -624,13 +640,13 @@ OFX;
         $tenant = $this->createTenantWithRoles();
         Sanctum::actingAs($this->createAdmin($tenant));
 
-        $costCenterId = $this->createCostCenter();
+        $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
 
         $accountId = $this->postJson('/api/accounts', [
             'type' => 'payable',
             'description' => 'Compra com anexos',
-            'cost_center_id' => $costCenterId,
+            'bank_account_id' => $costCenterId,
             'category_id' => $categoryId,
             'value' => 300,
             'due_date' => '2026-09-01',
@@ -656,5 +672,91 @@ OFX;
         $this->deleteJson("/api/accounts/{$accountId}/documents/{$firstId}")->assertOk();
 
         $this->getJson("/api/accounts/{$accountId}/documents")->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_allocated_expense_splits_between_cost_centers(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+        $obraB = $this->createCostCenter('Obra B');
+        $obraC = $this->createCostCenter('Obra C');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Balaroti',
+            'bank_account_id' => $bankAccountId,
+            'value' => 2500,
+            'due_date' => '2026-09-10',
+            'allocations' => [
+                ['cost_center_id' => $obraA, 'value' => 1000],
+                ['cost_center_id' => $obraB, 'value' => 800],
+                ['cost_center_id' => $obraC, 'value' => 700],
+            ],
+        ])->assertCreated();
+
+        $account = FinancialAccount::query()->with('allocations')->first();
+        $this->assertSame('split', $account->allocation_mode);
+        $this->assertCount(3, $account->allocations);
+        $this->assertEqualsWithDelta(2500, $account->allocations->sum('value'), 0.01);
+    }
+
+    public function test_credit_card_invoice_payment_does_not_double_count_expenses(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Itaú',
+            'institution' => 'Itaú',
+            'closing_day' => 25,
+            'due_day' => 5,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+            'description' => 'Compra A',
+            'category_id' => $categoryId,
+            'cost_center_id' => $obraA,
+            'value' => 1000,
+            'due_date' => '2026-09-01',
+        ])->assertCreated();
+
+        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+            'description' => 'Compra B',
+            'category_id' => $categoryId,
+            'cost_center_id' => $obraA,
+            'value' => 500,
+            'due_date' => '2026-09-02',
+        ])->assertCreated();
+
+        $invoice = $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
+            'reference_month' => '2026-09',
+        ])->assertOk()->json('data');
+
+        $this->assertEqualsWithDelta(1500, $invoice['total_value'], 0.01);
+
+        $purchases = FinancialAccount::query()->where('is_card_purchase', true)->get();
+        $this->assertCount(2, $purchases);
+
+        $invoicePayable = FinancialAccount::query()->where('is_card_invoice_payable', true)->first();
+        $this->assertNotNull($invoicePayable);
+        $this->assertEqualsWithDelta(1500, $invoicePayable->value, 0.01);
+
+        $this->postJson("/api/accounts/{$invoicePayable->uuid}/settle", [
+            'value' => 1500,
+            'settled_at' => '2026-10-05',
+        ])->assertOk();
+
+        $cashFlow = $this->getJson('/api/cash-flow/realized?from=2026-10-01&to=2026-10-31')->assertOk()->json('data');
+        $this->assertEqualsWithDelta(1500, $cashFlow['total_out'], 0.01);
     }
 }

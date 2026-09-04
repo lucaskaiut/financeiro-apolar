@@ -3,18 +3,30 @@ import type { ApiResponse, PaginatedResponse } from '@/shared/types/api'
 import type { Account, AccountDocument } from '@/shared/types/models'
 import type { AccountListParams } from '@/shared/constants/query-keys'
 
+export interface AccountAllocationPayload {
+  cost_center_id?: string | null
+  company_id?: string | null
+  category_id?: string | null
+  subcategory_id?: string | null
+  value?: number
+  percentage?: number
+}
+
 export interface AccountPayload {
   type: 'payable' | 'receivable'
   description: string
   counterparty?: string | null
-  cost_center_id: string
-  category_id: string
+  bank_account_id?: string | null
+  company_id?: string | null
+  cost_center_id?: string | null
+  category_id?: string | null
   subcategory_id?: string | null
   value: number
   due_date: string
   expected_date?: string | null
   paid_date?: string | null
   observation?: string | null
+  allocations?: AccountAllocationPayload[] | null
   installments?: { quantity: number; interval?: 'daily' | 'weekly' | 'monthly' } | null
 }
 
@@ -43,10 +55,10 @@ export const accountsService = {
     return response.data
   },
 
-  async importXlsx(file: File, cost_center_id: string): Promise<void> {
+  async importXlsx(file: File, bank_account_id: string): Promise<void> {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('cost_center_id', cost_center_id)
+    formData.append('bank_account_id', bank_account_id)
 
     await http.post('/accounts/import', formData)
   },

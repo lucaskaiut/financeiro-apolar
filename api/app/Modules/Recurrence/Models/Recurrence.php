@@ -4,7 +4,7 @@ namespace App\Modules\Recurrence\Models;
 
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Category\Models\Category;
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Recurrence\Enums\RecurrenceFrequency;
 use App\Modules\Shared\Models\Concerns\HasUuid;
 use App\Modules\Tenant\Models\Concerns\BelongsToTenant;
@@ -23,7 +23,7 @@ class Recurrence extends Model
         'type',
         'description',
         'counterparty',
-        'cost_center_id',
+        'bank_account_id',
         'category_id',
         'subcategory_id',
         'value',
@@ -45,9 +45,9 @@ class Recurrence extends Model
         ];
     }
 
-    public function costCenter(): BelongsTo
+    public function bankAccount(): BelongsTo
     {
-        return $this->belongsTo(CostCenter::class, 'cost_center_id', 'uuid');
+        return $this->belongsTo(BankAccount::class, 'bank_account_id', 'uuid');
     }
 
     public function category(): BelongsTo

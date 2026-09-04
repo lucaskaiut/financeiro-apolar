@@ -4,7 +4,7 @@ import { ReportScreenViewer, ReportViewButton, type ScreenReportColumn } from '.
 import { CategoryMatrixViewer, CategoryViewButton } from '../components/CategoryMatrixViewer'
 import { MonthlySummaryTable } from '../components/MonthlySummaryTable'
 import { MonthlySummaryViewer, MonthlySummaryViewButton } from '../components/MonthlySummaryViewer'
-import { CostCenterFilter, useCostCenterLabel } from '../components/CostCenterFilter'
+import { BankAccountFilter, useBankAccountLabel } from '../components/BankAccountFilter'
 import { ReportExportButtons } from '../components/ReportExportButtons'
 import { ReportGroupHeader } from '../components/ReportGroupHeader'
 import { ProvisionMatrixTable } from '../components/ProvisionMatrixTable'
@@ -40,7 +40,7 @@ import { addDays, toIsoDate } from '@/shared/utils/date'
 import {
   useCashFlowStatement,
   useCategoryReport,
-  useCostCenterReport,
+  useBankAccountReport,
   useDailyReport,
   useMonthlySummaryReport,
   usePayablesReport,
@@ -48,10 +48,10 @@ import {
   useWeeklyReport,
 } from '../hooks/useReports'
 import type {
-  CostCenterReportRow,
-  DailyCostCenterGroup,
+  BankAccountReportRow,
+  DailyBankAccountGroup,
   PayableAccount,
-  WeeklyCostCenterGroup,
+  WeeklyBankAccountGroup,
 } from '../services/reports.service'
 import { printHtmlReport } from '@/shared/utils/report-export'
 import { buildReportHtml } from '../utils/report-html-export'
@@ -63,7 +63,7 @@ const TABS = [
   { id: 'provision', label: 'Provisão' },
   { id: 'category', label: 'Por categoria' },
   { id: 'monthly-summary', label: 'Resumo mensal' },
-  { id: 'cost-center', label: 'Por centro de custo' },
+  { id: 'bank-account', label: 'Por conta bancária' },
   { id: 'cash-flow', label: 'Demonstrativo' },
   { id: 'payables', label: 'Contas a pagar' },
 ] as const
@@ -107,7 +107,7 @@ export default function ReportsPage() {
         {tab === 'provision' && <ProvisionSection />}
         {tab === 'category' && <CategorySection />}
         {tab === 'monthly-summary' && <MonthlySummarySection />}
-        {tab === 'cost-center' && <CostCenterSection />}
+        {tab === 'bank-account' && <BankAccountSection />}
         {tab === 'cash-flow' && <CashFlowSection />}
         {tab === 'payables' && <PayablesSection />}
       </PageContent>
@@ -117,11 +117,11 @@ export default function ReportsPage() {
 
 function DailySection() {
   const [date, setDate] = useState(today)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'value', direction: 'desc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
-  const query = useDailyReport({ date, cost_center_id: costCenterId || undefined })
+  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const query = useDailyReport({ date, bank_account_id: costCenterId || undefined })
 
   type MovementRow = NonNullable<typeof query.data>['payments'][number]
 
@@ -190,7 +190,7 @@ function DailySection() {
 
     if (group.payments.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Pagamentos`,
+        title: `${group.bank_account} · Pagamentos`,
         rows: group.payments,
         footer: { label: 'Total pago', value: formatCurrency(group.total_paid) },
       })
@@ -198,7 +198,7 @@ function DailySection() {
 
     if (group.receipts.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Recebimentos`,
+        title: `${group.bank_account} · Recebimentos`,
         rows: group.receipts,
         footer: { label: 'Total recebido', value: formatCurrency(group.total_received) },
       })
@@ -206,7 +206,7 @@ function DailySection() {
 
     if (group.payments.length > 0 || group.receipts.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Saldo do centro`,
+        title: `${group.bank_account} · Saldo do centro`,
         rows: [] as MovementRow[],
         footer: { label: 'Saldo', value: formatCurrency(group.balance) },
       })
@@ -220,7 +220,7 @@ function DailySection() {
 
     if (group.payments.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Pagamentos`,
+        title: `${group.bank_account} · Pagamentos`,
         headers: movementHeaders,
         rows: movementRows(group.payments),
         amountColumns: [2],
@@ -230,7 +230,7 @@ function DailySection() {
 
     if (group.receipts.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Recebimentos`,
+        title: `${group.bank_account} · Recebimentos`,
         headers: movementHeaders,
         rows: movementRows(group.receipts),
         amountColumns: [2],
@@ -240,7 +240,7 @@ function DailySection() {
 
     if (group.payments.length > 0 || group.receipts.length > 0) {
       sections.push({
-        title: `${group.cost_center} · Saldo do centro`,
+        title: `${group.bank_account} · Saldo do centro`,
         headers: movementHeaders,
         rows: [],
         footer: { label: 'Saldo', value: formatCurrency(group.balance) },
@@ -260,7 +260,7 @@ function DailySection() {
 
         if (group.payments.length > 0) {
           tables.push({
-            banner: `${group.cost_center} · Pagamentos`,
+            banner: `${group.bank_account} · Pagamentos`,
             headers: movementHeaders,
             rows: movementXlsxRows(group.payments),
             footer: ['Total pago', '', group.total_paid],
@@ -269,7 +269,7 @@ function DailySection() {
 
         if (group.receipts.length > 0) {
           tables.push({
-            banner: `${group.cost_center} · Recebimentos`,
+            banner: `${group.bank_account} · Recebimentos`,
             headers: movementHeaders,
             rows: movementXlsxRows(group.receipts),
             footer: ['Total recebido', '', group.total_received],
@@ -277,7 +277,7 @@ function DailySection() {
         }
 
         tables.push({
-          banner: `${group.cost_center} · Saldo do centro`,
+          banner: `${group.bank_account} · Saldo do centro`,
           headers: movementHeaders,
           rows: [],
           footer: ['Saldo', '', group.balance],
@@ -303,7 +303,7 @@ function DailySection() {
             to={date}
             onChange={({ to }) => setDate(to)}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -344,7 +344,7 @@ function DailySection() {
                 <EmptyState icon={BarChart3} title="Sem movimentações no dia" />
               ) : (
                 dailyGroups.map((group) => (
-                  <DailyCostCenterBlock key={group.cost_center} group={group} columns={movementTableColumns} />
+                  <DailyBankAccountBlock key={group.bank_account} group={group} columns={movementTableColumns} />
                 ))
               )}
             </div>
@@ -373,16 +373,16 @@ function DailySection() {
 function WeeklySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'total_paid', direction: 'desc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
-  const query = useWeeklyReport({ from: from || undefined, to: to || undefined, cost_center_id: costCenterId || undefined })
+  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const query = useWeeklyReport({ from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined })
 
-  type WeeklyGroupRow = WeeklyCostCenterGroup
+  type WeeklyGroupRow = WeeklyBankAccountGroup
 
   const weeklyAccessors = {
-    cost_center: (row: WeeklyGroupRow) => row.cost_center,
+    bank_account: (row: WeeklyGroupRow) => row.bank_account,
     total_paid: (row: WeeklyGroupRow) => row.total_paid,
     total_received: (row: WeeklyGroupRow) => row.total_received,
     net_balance: (row: WeeklyGroupRow) => row.net_balance,
@@ -394,7 +394,7 @@ function WeeklySection() {
   const filteredBalance = weeklyGroups.reduce((sum, group) => sum + group.net_balance, 0)
 
   const weeklyColumns: ScreenReportColumn<WeeklyGroupRow>[] = [
-    { key: 'cost_center', header: 'Centro de custo', cell: (row) => row.cost_center },
+    { key: 'bank_account', header: 'Conta bancária', cell: (row) => row.bank_account },
     { key: 'total_paid', header: 'Total pago', align: 'right', cell: (row) => formatCurrency(row.total_paid) },
     { key: 'total_received', header: 'Total recebido', align: 'right', cell: (row) => formatCurrency(row.total_received) },
     { key: 'net_balance', header: 'Saldo líquido', align: 'right', cell: (row) => formatCurrency(row.net_balance) },
@@ -416,9 +416,9 @@ function WeeklySection() {
       subtitleLines: [subtitle],
       tables: [
         {
-          headers: ['Centro de custo', 'Total pago', 'Total recebido', 'Saldo líquido'],
+          headers: ['Conta bancária', 'Total pago', 'Total recebido', 'Saldo líquido'],
           rows: weeklyGroups.map((group) => [
-            group.cost_center,
+            group.bank_account,
             group.total_paid,
             group.total_received,
             group.net_balance,
@@ -445,7 +445,7 @@ function WeeklySection() {
               setTo(nextTo)
             }}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -469,7 +469,7 @@ function WeeklySection() {
                       title: 'Relatório semanal',
                       subtitle,
                       sections: weeklyGroups.map((group) => ({
-                        title: group.cost_center,
+                        title: group.bank_account,
                         headers: ['Total pago', 'Total recebido', 'Saldo líquido'],
                         rows: [[formatCurrency(group.total_paid), formatCurrency(group.total_received), formatCurrency(group.net_balance)]],
                         amountColumns: [0, 1, 2],
@@ -491,9 +491,9 @@ function WeeklySection() {
           <DataTable
             columns={[
               {
-                key: 'cost_center',
-                header: renderColumnHeader('cost_center', 'Centro de custo', { placeholder: 'Filtrar…' }),
-                render: (row) => <span className="font-medium text-foreground">{row.cost_center}</span>,
+                key: 'bank_account',
+                header: renderColumnHeader('bank_account', 'Conta bancária', { placeholder: 'Filtrar…' }),
+                render: (row) => <span className="font-medium text-foreground">{row.bank_account}</span>,
               },
               {
                 key: 'total_paid',
@@ -515,7 +515,7 @@ function WeeklySection() {
               },
             ]}
             rows={weeklyGroups}
-            rowKey={(row) => row.cost_center}
+            rowKey={(row) => row.bank_account}
             loading={query.isPending}
             emptyState={<EmptyState icon={BarChart3} title="Sem movimentações no período" />}
           />
@@ -529,7 +529,7 @@ function WeeklySection() {
         description={subtitle}
         columns={weeklyColumns}
         sections={weeklyGroups.map((group) => ({
-          title: group.cost_center,
+          title: group.bank_account,
           rows: [group],
           footer: { label: 'Saldo do centro', value: formatCurrency(group.net_balance) },
         }))}
@@ -538,7 +538,7 @@ function WeeklySection() {
           { label: 'Total recebido', value: formatCurrency(filteredReceived) },
           { label: 'Saldo líquido', value: formatCurrency(filteredBalance) },
         ]}
-        rowKey={(row) => row.cost_center}
+        rowKey={(row) => row.bank_account}
       />
     </Card>
   )
@@ -547,17 +547,17 @@ function WeeklySection() {
 function ProvisionSection() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(defaultProvisionTo)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
-  const costCenterLabel = useCostCenterLabel(costCenterId)
+  const costCenterLabel = useBankAccountLabel(costCenterId)
   const query = useProvisionReport({
     from: from || undefined,
     to: to || undefined,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: costCenterId || undefined,
   })
 
   const data = query.data
-  const exportParams = { from: from || undefined, to: to || undefined, cost_center_id: costCenterId || undefined }
+  const exportParams = { from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
   const subtitle = `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)} · ${costCenterLabel}`
@@ -583,7 +583,7 @@ function ProvisionSection() {
               setTo(nextTo)
             }}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -625,14 +625,14 @@ function ProvisionSection() {
 function CategorySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'total', direction: 'desc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
+  const costCenterLabel = useBankAccountLabel(costCenterId)
   const query = useCategoryReport({
     from: from || undefined,
     to: to || undefined,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: costCenterId || undefined,
   })
 
   type CategoryRow = { category: string; total: number }
@@ -694,7 +694,7 @@ function CategorySection() {
         title: 'Relatório por categoria',
         subtitle,
         sections: categoryGroups.map((group) => ({
-          title: group.cost_center,
+          title: group.bank_account,
           headers: ['Categoria', 'Valor'],
           rows: group.expense.map((row) => [row.category, formatCurrency(row.total)]),
           amountColumns: [1],
@@ -731,11 +731,11 @@ function CategorySection() {
 
           return [
             {
-              banner: group.cost_center,
+              banner: group.bank_account,
               headers,
               rows,
               footer: [
-                `${group.cost_center} - Totais`,
+                `${group.bank_account} - Totais`,
                 ...filteredMatrix.columns.map((column) => group.subtotal.amounts[column.key] ?? null),
                 group.subtotal.total,
               ],
@@ -754,7 +754,7 @@ function CategorySection() {
       title: 'Relatório por categoria',
       subtitleLines: [subtitle],
       tables: categoryGroups.map((group) => ({
-        banner: group.cost_center,
+        banner: group.bank_account,
         headers: ['Categoria', 'Valor'],
         rows: group.expense.map((row) => [row.category, row.total]),
         footer: ['Total', group.total_expense],
@@ -774,7 +774,7 @@ function CategorySection() {
               setTo(nextTo)
             }}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -794,8 +794,8 @@ function CategorySection() {
                 <EmptyState icon={BarChart3} title="Sem dados no período" />
               ) : (
                 categoryGroups.map((group) => (
-                  <div key={group.cost_center}>
-                    <ReportGroupHeader title={group.cost_center} subtitle={`Despesas: ${formatCurrency(group.total_expense)}`} />
+                  <div key={group.bank_account}>
+                    <ReportGroupHeader title={group.bank_account} subtitle={`Despesas: ${formatCurrency(group.total_expense)}`} />
                     <DataTable
                       columns={categoryTableColumns}
                       rows={group.expense}
@@ -827,17 +827,17 @@ function CategorySection() {
 function MonthlySummarySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
-  const costCenterLabel = useCostCenterLabel(costCenterId)
+  const costCenterLabel = useBankAccountLabel(costCenterId)
   const query = useMonthlySummaryReport({
     from: from || undefined,
     to: to || undefined,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: costCenterId || undefined,
   })
 
   const data = query.data
-  const exportParams = { from: from || undefined, to: to || undefined, cost_center_id: costCenterId || undefined }
+  const exportParams = { from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
   const subtitle = `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)} · ${costCenterLabel}`
@@ -846,7 +846,7 @@ function MonthlySummarySection() {
   const exportMonthlySummaryPdf = () => {
     if (!data) return
 
-    printHtmlReport('Resumo mensal', buildMonthlySummaryHtml(data, 'Resumo mensal por centro de custo', subtitle))
+    printHtmlReport('Resumo mensal', buildMonthlySummaryHtml(data, 'Resumo mensal por conta bancária', subtitle))
   }
 
   return (
@@ -861,7 +861,7 @@ function MonthlySummarySection() {
               setTo(nextTo)
             }}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -903,28 +903,28 @@ function MonthlySummarySection() {
   )
 }
 
-function CostCenterSection() {
-  const [costCenterId, setCostCenterId] = useState('')
+function BankAccountSection() {
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'expense', direction: 'desc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
-  const query = useCostCenterReport({ cost_center_id: costCenterId || undefined })
+  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const query = useBankAccountReport({ bank_account_id: costCenterId || undefined })
 
   const accessors = {
-    cost_center: (row: CostCenterReportRow) => row.cost_center,
-    initial_balance: (row: CostCenterReportRow) => row.initial_balance,
-    income: (row: CostCenterReportRow) => row.income,
-    expense: (row: CostCenterReportRow) => row.expense,
-    balance: (row: CostCenterReportRow) => row.balance,
+    bank_account: (row: BankAccountReportRow) => row.bank_account,
+    initial_balance: (row: BankAccountReportRow) => row.initial_balance,
+    income: (row: BankAccountReportRow) => row.income,
+    expense: (row: BankAccountReportRow) => row.expense,
+    balance: (row: BankAccountReportRow) => row.balance,
   }
 
   const rows = applyColumnTableState(query.data?.rows ?? [], columnState, accessors)
 
-  const columns: Array<Column<CostCenterReportRow>> = [
+  const columns: Array<Column<BankAccountReportRow>> = [
     {
       key: 'name',
-      header: renderColumnHeader('cost_center', 'Centro de custo', { placeholder: 'Filtrar…' }),
-      render: (r) => <span className="font-medium text-foreground">{r.cost_center}</span>,
+      header: renderColumnHeader('bank_account', 'Conta bancária', { placeholder: 'Filtrar…' }),
+      render: (r) => <span className="font-medium text-foreground">{r.bank_account}</span>,
     },
     {
       key: 'initial',
@@ -952,15 +952,15 @@ function CostCenterSection() {
     },
   ]
 
-  const screenColumns: ScreenReportColumn<CostCenterReportRow>[] = [
-    { key: 'name', header: 'Centro de custo', cell: (row) => row.cost_center },
+  const screenColumns: ScreenReportColumn<BankAccountReportRow>[] = [
+    { key: 'name', header: 'Conta bancária', cell: (row) => row.bank_account },
     { key: 'initial', header: 'Saldo inicial', align: 'right', cell: (row) => formatCurrency(row.initial_balance) },
     { key: 'income', header: 'Entradas', align: 'right', cell: (row) => formatCurrency(row.income) },
     { key: 'expense', header: 'Saídas', align: 'right', cell: (row) => formatCurrency(row.expense) },
     { key: 'balance', header: 'Saldo', align: 'right', cell: (row) => formatCurrency(row.balance) },
   ]
 
-  const costCenterHeaders = ['Centro de custo', 'Saldo inicial', 'Entradas', 'Saídas', 'Saldo']
+  const costCenterHeaders = ['Conta bancária', 'Saldo inicial', 'Entradas', 'Saídas', 'Saldo']
   const grandTotals = {
     initial: rows.reduce((sum, row) => sum + row.initial_balance, 0),
     income: rows.reduce((sum, row) => sum + row.income, 0),
@@ -968,16 +968,16 @@ function CostCenterSection() {
     balance: rows.reduce((sum, row) => sum + row.balance, 0),
   }
 
-  const exportCostCenterXlsx = () => {
+  const exportBankAccountXlsx = () => {
     downloadReportXlsx({
       filename: 'relatorio-por-centro-de-custo.xlsx',
-      title: 'Relatório por centro de custo',
+      title: 'Relatório por conta bancária',
       subtitleLines: [costCenterLabel],
       tables: [
         {
           headers: costCenterHeaders,
           rows: rows.map((row) => [
-            row.cost_center,
+            row.bank_account,
             row.initial_balance,
             row.income,
             row.expense,
@@ -999,25 +999,25 @@ function CostCenterSection() {
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
-            <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+            <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
           </div>
           {!query.isPending && (
             <div className="flex flex-wrap justify-end gap-2">
               <ReportViewButton onClick={() => setViewerOpen(true)} />
               <ReportExportButtons
                 disabled={query.isPending}
-                onExportXlsx={exportCostCenterXlsx}
+                onExportXlsx={exportBankAccountXlsx}
                 onExportPdf={() =>
                   printHtmlReport(
-                    'Relatório por centro de custo',
+                    'Relatório por conta bancária',
                     buildReportHtml({
-                      title: 'Relatório por centro de custo',
+                      title: 'Relatório por conta bancária',
                       subtitle: costCenterLabel,
                       sections: [
                         {
                           headers: costCenterHeaders,
                           rows: rows.map((row) => [
-                            row.cost_center,
+                            row.bank_account,
                             formatCurrency(row.initial_balance),
                             formatCurrency(row.income),
                             formatCurrency(row.expense),
@@ -1039,7 +1039,7 @@ function CostCenterSection() {
             </div>
           )}
         </div>
-        <DataTable columns={columns} rows={rows} rowKey={(r) => r.cost_center_id} loading={query.isPending} emptyState={<EmptyState icon={BarChart3} title="Sem centros de custo" />} />
+        <DataTable columns={columns} rows={rows} rowKey={(r) => r.bank_account_id} loading={query.isPending} emptyState={<EmptyState icon={BarChart3} title="Sem contas bancárias" />} />
         {!query.isPending && rows.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-4">
             <Summary label="Saldo inicial total" value={grandTotals.initial} />
@@ -1053,11 +1053,11 @@ function CostCenterSection() {
       <ReportScreenViewer
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
-        title="Relatório por centro de custo"
+        title="Relatório por conta bancária"
         description={costCenterLabel}
         columns={screenColumns}
         sections={rows.map((row) => ({
-          title: row.cost_center,
+          title: row.bank_account,
           rows: [row],
           footer: { label: 'Saldo do centro', value: formatCurrency(row.balance) },
         }))}
@@ -1067,7 +1067,7 @@ function CostCenterSection() {
           { label: 'Saídas totais', value: formatCurrency(grandTotals.expense) },
           { label: 'Saldo total', value: formatCurrency(grandTotals.balance) },
         ]}
-        rowKey={(row) => row.cost_center_id}
+        rowKey={(row) => row.bank_account_id}
       />
     </Card>
   )
@@ -1077,22 +1077,22 @@ function CashFlowSection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [days, setDays] = useState(30)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'realized_net', direction: 'desc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
+  const costCenterLabel = useBankAccountLabel(costCenterId)
 
   const query = useCashFlowStatement({
     from: from || undefined,
     to: to || undefined,
     days,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: costCenterId || undefined,
   })
 
   type CashFlowGroupRow = NonNullable<typeof query.data>['groups'][number]
 
   const accessors = {
-    cost_center: (row: CashFlowGroupRow) => row.cost_center,
+    bank_account: (row: CashFlowGroupRow) => row.bank_account,
     realized_net: (row: CashFlowGroupRow) => row.realized_net,
     projected_net: (row: CashFlowGroupRow) => row.projected_net,
     expected_final_balance: (row: CashFlowGroupRow) => row.expected_final_balance,
@@ -1107,9 +1107,9 @@ function CashFlowSection() {
 
   const cashFlowGroupColumns: Array<Column<CashFlowGroupRow>> = [
     {
-      key: 'cost_center',
-      header: renderColumnHeader('cost_center', 'Centro de custo', { placeholder: 'Filtrar…' }),
-      render: (row) => <span className="font-medium text-foreground">{row.cost_center}</span>,
+      key: 'bank_account',
+      header: renderColumnHeader('bank_account', 'Conta bancária', { placeholder: 'Filtrar…' }),
+      render: (row) => <span className="font-medium text-foreground">{row.bank_account}</span>,
     },
     {
       key: 'realized_net',
@@ -1132,7 +1132,7 @@ function CashFlowSection() {
   ]
 
   const cashFlowGroupScreenColumns: ScreenReportColumn<CashFlowGroupRow>[] = [
-    { key: 'cost_center', header: 'Centro de custo', cell: (row) => row.cost_center },
+    { key: 'bank_account', header: 'Conta bancária', cell: (row) => row.bank_account },
     { key: 'realized_net', header: 'Resultado realizado', align: 'right', cell: (row) => formatCurrency(row.realized_net) },
     { key: 'projected_net', header: 'Resultado projetado', align: 'right', cell: (row) => formatCurrency(row.projected_net) },
     { key: 'expected_final_balance', header: 'Saldo final esperado', align: 'right', cell: (row) => formatCurrency(row.expected_final_balance) },
@@ -1149,9 +1149,9 @@ function CashFlowSection() {
       subtitleLines: [subtitle],
       tables: [
         {
-          headers: ['Centro de custo', 'Resultado realizado', 'Resultado projetado', 'Saldo final esperado'],
+          headers: ['Conta bancária', 'Resultado realizado', 'Resultado projetado', 'Saldo final esperado'],
           rows: cashFlowGroups.map((group) => [
-            group.cost_center,
+            group.bank_account,
             group.realized_net,
             group.projected_net,
             group.expected_final_balance,
@@ -1189,7 +1189,7 @@ function CashFlowSection() {
               { value: '90', label: '90 dias' },
             ]}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
           {query.data && (
             <>
               <ReportViewButton onClick={() => setViewerOpen(true)} />
@@ -1203,9 +1203,9 @@ function CashFlowSection() {
                       subtitle,
                       sections: [
                         {
-                          headers: ['Centro de custo', 'Resultado realizado', 'Resultado projetado', 'Saldo final esperado'],
+                          headers: ['Conta bancária', 'Resultado realizado', 'Resultado projetado', 'Saldo final esperado'],
                           rows: cashFlowGroups.map((group) => [
-                            group.cost_center,
+                            group.bank_account,
                             formatCurrency(group.realized_net),
                             formatCurrency(group.projected_net),
                             formatCurrency(group.expected_final_balance),
@@ -1239,8 +1239,8 @@ function CashFlowSection() {
               <DataTable
                 columns={cashFlowGroupColumns}
                 rows={cashFlowGroups}
-                rowKey={(row) => row.cost_center}
-                emptyState={<EmptyState icon={BarChart3} title="Sem centros de custo" />}
+                rowKey={(row) => row.bank_account}
+                emptyState={<EmptyState icon={BarChart3} title="Sem contas bancárias" />}
               />
             </>
           )
@@ -1263,7 +1263,7 @@ function CashFlowSection() {
           { label: 'Resultado projetado', value: formatCurrency(filteredComparative.projected_net) },
           { label: 'Saldo final esperado', value: formatCurrency(filteredComparative.expected_final_balance) },
         ]}
-        rowKey={(row) => row.cost_center}
+        rowKey={(row) => row.bank_account}
       />
     </Card>
   )
@@ -1272,16 +1272,16 @@ function CashFlowSection() {
 function PayablesSection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setCostCenterId] = useState('')
+  const [costCenterId, setBankAccountId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'due_date', direction: 'asc' })
-  const costCenterLabel = useCostCenterLabel(costCenterId)
+  const costCenterLabel = useBankAccountLabel(costCenterId)
 
   const query = usePayablesReport({
     from: from || undefined,
     to: to || undefined,
-    cost_center_id: costCenterId || undefined,
+    bank_account_id: costCenterId || undefined,
   })
 
   const payableAccessors = {
@@ -1353,7 +1353,7 @@ function PayablesSection() {
       const groupTables = []
 
       groupTables.push({
-        banner: group.cost_center,
+        banner: group.bank_account,
         headers: ['Data', 'Descrição', 'Valor'],
         rows: [] as Array<Array<string | number | null>>,
       })
@@ -1395,9 +1395,9 @@ function PayablesSection() {
         ...tables,
         {
           banner: `Resumo geral em ${referenceDate}`,
-          headers: ['Centro de custo', 'Pagos', 'Em atraso'],
+          headers: ['Conta bancária', 'Pagos', 'Em atraso'],
           rows: exportViewData.summary.paid_today.rows.map((row, index) => [
-            row.cost_center,
+            row.bank_account,
             row.amount,
             exportViewData.summary.overdue.rows[index]?.amount ?? 0,
           ]),
@@ -1430,7 +1430,7 @@ function PayablesSection() {
             id={`payables-select-all-${index}`}
             checked={allInGroupSelected}
             onChange={toggleGroup}
-            aria-label={`Selecionar pagamentos de ${group.cost_center}`}
+            aria-label={`Selecionar pagamentos de ${group.bank_account}`}
           />
         ),
         render: (account) => (
@@ -1489,7 +1489,7 @@ function PayablesSection() {
               setTo(nextTo)
             }}
           />
-          <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
         </div>
 
         {query.isPending ? (
@@ -1517,9 +1517,9 @@ function PayablesSection() {
                 </div>
 
                 {groups.map((group, index) => (
-                  <div key={group.cost_center}>
+                  <div key={group.bank_account}>
                     <ReportGroupHeader
-                      title={group.cost_center}
+                      title={group.bank_account}
                       subtitle={`Em atraso: ${formatCurrency(
                         group.accounts
                           .filter((account) => isPayablesReportOverdue(account, selected))
@@ -1571,17 +1571,17 @@ function Summary({ label, value, accent = 'text-foreground' }: { label: string; 
   )
 }
 
-function DailyCostCenterBlock({
+function DailyBankAccountBlock({
   group,
   columns,
 }: {
-  group: DailyCostCenterGroup
-  columns: Array<Column<DailyCostCenterGroup['payments'][number]>>
+  group: DailyBankAccountGroup
+  columns: Array<Column<DailyBankAccountGroup['payments'][number]>>
 }) {
   return (
     <div>
       <ReportGroupHeader
-        title={group.cost_center}
+        title={group.bank_account}
         total={group.balance}
         subtitle={`Pago: ${formatCurrency(group.total_paid)} · Recebido: ${formatCurrency(group.total_received)}`}
       />

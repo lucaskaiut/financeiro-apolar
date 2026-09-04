@@ -48,7 +48,7 @@ export default function RecurrencesListPage() {
       render: (r) => (
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground">{r.description}</p>
-          <p className="truncate text-[13px] text-muted">{r.counterparty ?? r.cost_center ?? '—'}</p>
+          <p className="truncate text-[13px] text-muted">{r.counterparty ?? r.bank_account ?? '—'}</p>
         </div>
       ),
     },

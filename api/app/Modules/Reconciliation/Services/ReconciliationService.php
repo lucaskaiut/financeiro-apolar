@@ -25,7 +25,7 @@ class ReconciliationService
     /**
      * @return array{imported: int, skipped: int}
      */
-    public function import(string $costCenterId, string $content): array
+    public function import(string $bankAccountId, string $content): array
     {
         $raw = $this->parser->parse($content);
 
@@ -43,7 +43,7 @@ class ReconciliationService
             }
 
             BankTransaction::query()->create([
-                'cost_center_id' => $costCenterId,
+                'bank_account_id' => $bankAccountId,
                 'date' => $item['date'],
                 'value' => $item['value'],
                 'type' => $item['type'],
@@ -58,12 +58,12 @@ class ReconciliationService
         return ['imported' => $imported, 'skipped' => $skipped];
     }
 
-    public function paginate(int $perPage = 15, ?string $status = null, ?string $costCenterId = null): LengthAwarePaginator
+    public function paginate(int $perPage = 15, ?string $status = null, ?string $bankAccountId = null): LengthAwarePaginator
     {
         return BankTransaction::query()
-            ->with(['costCenter:id,uuid,name', 'reconciliation.account:id,uuid,description'])
+            ->with(['bankAccount:id,uuid,name', 'reconciliation.account:id,uuid,description'])
             ->when(filled($status), fn ($q) => $q->where('status', $status))
-            ->when(filled($costCenterId), fn ($q) => $q->where('cost_center_id', $costCenterId))
+            ->when(filled($bankAccountId), fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->orderByDesc('date')
             ->orderByDesc('id')
             ->paginate(min(max($perPage, 1), 100));
@@ -74,11 +74,11 @@ class ReconciliationService
      *
      * @return array{matched: int, ambiguous: int, not_found: int}
      */
-    public function autoReconcile(User $user, ?string $costCenterId = null, ?string $from = null, ?string $to = null): array
+    public function autoReconcile(User $user, ?string $bankAccountId = null, ?string $from = null, ?string $to = null): array
     {
         $pending = BankTransaction::query()
             ->where('status', 'pending')
-            ->when($costCenterId, fn ($q) => $q->where('cost_center_id', $costCenterId))
+            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->orderBy('date')
             ->get();
 
@@ -114,7 +114,7 @@ class ReconciliationService
     {
         $query = FinancialAccount::query()
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-            ->where('cost_center_id', $transaction->cost_center_id);
+            ->where('bank_account_id', $transaction->bank_account_id);
 
         if (filled($from)) {
             $query->whereDate('due_date', '>=', $from);
@@ -198,7 +198,7 @@ class ReconciliationService
      *
      * Campos não informados são preenchidos automaticamente a partir do extrato.
      *
-     * @param  array{type: string, description: string, category_id: string, cost_center_id?: ?string, value?: ?numeric, due_date?: ?string, observation?: ?string}  $data
+     * @param  array{type: string, description: string, category_id: string, bank_account_id?: ?string, value?: ?numeric, due_date?: ?string, observation?: ?string}  $data
      */
     public function createFromTransaction(BankTransaction $transaction, array $data, User $user): FinancialAccount
     {
@@ -210,7 +210,7 @@ class ReconciliationService
             $account = FinancialAccount::query()->create([
                 'type' => $data['type'],
                 'description' => $data['description'],
-                'cost_center_id' => $data['cost_center_id'] ?? $transaction->cost_center_id,
+                'bank_account_id' => $data['bank_account_id'] ?? $transaction->bank_account_id,
                 'category_id' => $data['category_id'],
                 'value' => $data['value'] ?? $transaction->value,
                 'due_date' => $data['due_date'] ?? $transaction->date->toDateString(),

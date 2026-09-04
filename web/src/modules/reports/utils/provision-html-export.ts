@@ -22,7 +22,7 @@ export function buildProvisionMatrixHtml(data: ProvisionReport, title: string, s
 
   for (const group of data.groups) {
     sections.push(
-      `<tr class="section-banner"><td colspan="${headers.length}">${escapeHtml(group.cost_center)}</td></tr>`,
+      `<tr class="section-banner"><td colspan="${headers.length}">${escapeHtml(group.bank_account)}</td></tr>`,
     )
     sections.push(columnHeaderRow(headers))
 

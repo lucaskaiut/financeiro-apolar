@@ -4,8 +4,12 @@ namespace App\Modules\Account\Models;
 
 use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Category\Models\Category;
+use App\Modules\Company\Models\Company;
 use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\CreditCard\Models\CreditCard;
+use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\Reconciliation\Models\Reconciliation;
 use App\Modules\Recurrence\Models\Recurrence;
 use App\Modules\Shared\Models\Concerns\HasUuid;
@@ -27,7 +31,14 @@ class FinancialAccount extends Model
         'type',
         'description',
         'counterparty',
+        'bank_account_id',
+        'company_id',
         'cost_center_id',
+        'credit_card_id',
+        'credit_card_invoice_id',
+        'is_card_purchase',
+        'is_card_invoice_payable',
+        'allocation_mode',
         'category_id',
         'subcategory_id',
         'value',
@@ -54,6 +65,8 @@ class FinancialAccount extends Model
             'expected_date' => 'date',
             'paid_date' => 'date',
             'reconciled_at' => 'datetime',
+            'is_card_purchase' => 'boolean',
+            'is_card_invoice_payable' => 'boolean',
         ];
     }
 
@@ -66,9 +79,29 @@ class FinancialAccount extends Model
         });
     }
 
+    public function bankAccount(): BelongsTo
+    {
+        return $this->belongsTo(BankAccount::class, 'bank_account_id', 'uuid');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'company_id', 'uuid');
+    }
+
     public function costCenter(): BelongsTo
     {
         return $this->belongsTo(CostCenter::class, 'cost_center_id', 'uuid');
+    }
+
+    public function creditCard(): BelongsTo
+    {
+        return $this->belongsTo(CreditCard::class, 'credit_card_id', 'uuid');
+    }
+
+    public function creditCardInvoice(): BelongsTo
+    {
+        return $this->belongsTo(CreditCardInvoice::class, 'credit_card_invoice_id', 'uuid');
     }
 
     public function category(): BelongsTo
@@ -106,6 +139,11 @@ class FinancialAccount extends Model
         return $this->hasMany(Reconciliation::class, 'account_id');
     }
 
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(AccountAllocation::class, 'account_id');
+    }
+
     public function isReconciled(): bool
     {
         return $this->reconciled_at !== null;
@@ -114,6 +152,30 @@ class FinancialAccount extends Model
     public function isSettled(): bool
     {
         return $this->status === AccountStatus::Settled;
+    }
+
+    public function isCardPurchase(): bool
+    {
+        return (bool) $this->is_card_purchase;
+    }
+
+    public function isCardInvoicePayable(): bool
+    {
+        return (bool) $this->is_card_invoice_payable;
+    }
+
+    public function countsForEconomicReports(): bool
+    {
+        return ! $this->is_card_invoice_payable;
+    }
+
+    public function countsForBankBalance(Settlement $settlement): bool
+    {
+        if ($settlement->method === 'credit_card_invoice') {
+            return false;
+        }
+
+        return ! $this->is_card_purchase || $this->is_card_invoice_payable;
     }
 
     public function getSettledAmountAttribute(): float

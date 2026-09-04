@@ -3,8 +3,8 @@ import type { ApiResponse, ListParams, PaginatedResponse } from '@/shared/types/
 import type { Transfer } from '@/shared/types/models'
 
 export interface TransferPayload {
-  from_cost_center_id: string
-  to_cost_center_id: string
+  from_bank_account_id: string
+  to_bank_account_id: string
   value: number
   date: string
   description?: string | null

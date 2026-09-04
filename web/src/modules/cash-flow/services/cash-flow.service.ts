@@ -5,7 +5,7 @@ export interface RealizedEntry {
   id: string
   date: string
   description: string
-  cost_center: string | null
+  bank_account: string | null
   category: string | null
   direction: 'in' | 'out'
   value: number
@@ -26,7 +26,7 @@ export interface ProjectedItem {
   id: string
   description: string
   counterparty: string | null
-  cost_center: string | null
+  bank_account: string | null
   category: string | null
   direction: 'in' | 'out'
   value: number

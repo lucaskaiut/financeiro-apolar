@@ -16,10 +16,29 @@ export const queryKeys = {
     detail: (id: number) => ['roles', 'detail', id] as const,
   },
 
+  bankAccounts: {
+    all: ['bank-accounts'] as const,
+    list: (params: ListParams) => ['bank-accounts', 'list', params] as const,
+    detail: (id: string) => ['bank-accounts', 'detail', id] as const,
+  },
+
   costCenters: {
     all: ['cost-centers'] as const,
     list: (params: ListParams) => ['cost-centers', 'list', params] as const,
     detail: (id: string) => ['cost-centers', 'detail', id] as const,
+  },
+
+  companies: {
+    all: ['companies'] as const,
+    list: (params: ListParams) => ['companies', 'list', params] as const,
+    detail: (id: string) => ['companies', 'detail', id] as const,
+  },
+
+  creditCards: {
+    all: ['credit-cards'] as const,
+    list: (params: ListParams) => ['credit-cards', 'list', params] as const,
+    detail: (id: string) => ['credit-cards', 'detail', id] as const,
+    invoices: (id: string) => ['credit-cards', 'detail', id, 'invoices'] as const,
   },
 
   categories: {
@@ -53,7 +72,7 @@ export const queryKeys = {
 
   reconciliation: {
     all: ['reconciliation'] as const,
-    list: (params: ListParams & { status?: string; cost_center_id?: string }) =>
+    list: (params: ListParams & { status?: string; bank_account_id?: string }) =>
       ['reconciliation', 'transactions', params] as const,
     candidates: (id: string, from?: string, to?: string) =>
       ['reconciliation', 'candidates', id, { from, to }] as const,
@@ -65,7 +84,7 @@ export const queryKeys = {
     provision: (params: Record<string, unknown>) => ['reports', 'provision', params] as const,
     byCategory: (params: Record<string, unknown>) => ['reports', 'by-category', params] as const,
     monthlySummary: (params: Record<string, unknown>) => ['reports', 'monthly-summary', params] as const,
-    byCostCenter: (params: Record<string, unknown>) => ['reports', 'by-cost-center', params] as const,
+    byBankAccount: (params: Record<string, unknown>) => ['reports', 'by-bank-account', params] as const,
     cashFlow: (params: Record<string, unknown>) => ['reports', 'cash-flow', params] as const,
     payables: (params: Record<string, unknown>) => ['reports', 'payables', params] as const,
   },
@@ -88,7 +107,9 @@ export interface AccountListParams extends ListParams {
   type?: string
   status?: string
   overdue?: boolean | string
+  bank_account_id?: string
   cost_center_id?: string
+  company_id?: string
   category_id?: string
   due_from?: string
   due_to?: string

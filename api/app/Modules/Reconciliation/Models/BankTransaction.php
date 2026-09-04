@@ -2,7 +2,7 @@
 
 namespace App\Modules\Reconciliation\Models;
 
-use App\Modules\CostCenter\Models\CostCenter;
+use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Shared\Models\Concerns\HasUuid;
 use App\Modules\Tenant\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +15,7 @@ class BankTransaction extends Model
     use HasUuid;
 
     protected $fillable = [
-        'cost_center_id',
+        'bank_account_id',
         'date',
         'value',
         'type',
@@ -32,9 +32,9 @@ class BankTransaction extends Model
         ];
     }
 
-    public function costCenter(): BelongsTo
+    public function bankAccount(): BelongsTo
     {
-        return $this->belongsTo(CostCenter::class, 'cost_center_id', 'uuid');
+        return $this->belongsTo(BankAccount::class, 'bank_account_id', 'uuid');
     }
 
     public function reconciliation(): HasOne

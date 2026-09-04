@@ -30,7 +30,7 @@ class ReconciliationController extends ApiController
         $transactions = $this->service->paginate(
             (int) $request->integer('per_page', 15),
             $request->string('status')->toString() ?: null,
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
         );
 
         return $this->paginated(BankTransactionResource::collection($transactions));
@@ -45,7 +45,7 @@ class ReconciliationController extends ApiController
         );
 
         return $this->success([
-            'transaction' => BankTransactionResource::make($transaction->load('costCenter:id,uuid,name')),
+            'transaction' => BankTransactionResource::make($transaction->load('bankAccount:id,uuid,name')),
             'candidates' => AccountResource::collection($candidates),
         ]);
     }
@@ -53,7 +53,7 @@ class ReconciliationController extends ApiController
     public function import(ImportOfxRequest $request): JsonResponse
     {
         $result = $this->service->import(
-            $request->string('cost_center_id')->toString(),
+            $request->string('bank_account_id')->toString(),
             $request->string('content')->toString(),
         );
 
@@ -61,7 +61,7 @@ class ReconciliationController extends ApiController
             $request->user(),
             AuditAction::ReconciliationExecute,
             'bank_transaction',
-            $request->string('cost_center_id')->toString(),
+            $request->string('bank_account_id')->toString(),
             ['imported' => $result['imported']],
         );
 
@@ -72,7 +72,7 @@ class ReconciliationController extends ApiController
     {
         $result = $this->service->autoReconcile(
             $request->user(),
-            $request->string('cost_center_id')->toString() ?: null,
+            $request->string('bank_account_id')->toString() ?: null,
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
         );

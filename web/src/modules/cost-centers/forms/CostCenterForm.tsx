@@ -15,13 +15,6 @@ import { applyApiErrorsToForm } from '@/shared/utils/forms'
 import { costCenterSchema, type CostCenterFormValues } from '../schemas/cost-center.schema'
 import type { CostCenterPayload } from '../services/cost-centers.service'
 
-const TYPE_OPTIONS = [
-  { value: 'checking', label: 'Conta corrente' },
-  { value: 'savings', label: 'Conta poupança' },
-  { value: 'investment', label: 'Investimento' },
-  { value: 'other', label: 'Outro' },
-]
-
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Ativo' },
   { value: 'inactive', label: 'Inativo' },
@@ -39,11 +32,6 @@ export function CostCenterForm({ mode, defaultValues, submitting, onSubmit }: Co
     resolver: zodResolver(costCenterSchema),
     defaultValues: {
       name: '',
-      bank: '',
-      agency: '',
-      account: '',
-      type: '',
-      initial_balance: '',
       status: 'active',
       ...defaultValues,
     },
@@ -53,11 +41,6 @@ export function CostCenterForm({ mode, defaultValues, submitting, onSubmit }: Co
     try {
       await onSubmit({
         name: values.name,
-        bank: values.bank || null,
-        agency: values.agency || null,
-        account: values.account || null,
-        type: values.type,
-        initial_balance: values.initial_balance === '' ? 0 : Number(values.initial_balance),
         status: values.status,
       })
     } catch (error) {
@@ -71,19 +54,9 @@ export function CostCenterForm({ mode, defaultValues, submitting, onSubmit }: Co
     <Card>
       <CardContent>
         <Form form={form} onSubmit={handleSubmit} className="space-y-8">
-          <Section title="Dados da conta bancária">
+          <Section title="Dados do centro de custo">
             <div className="grid gap-4 sm:grid-cols-2">
-              <TextField name="name" label="Nome" placeholder="Ex.: Banco A - Conta principal" required className="sm:col-span-2" />
-              <TextField name="bank" label="Banco" placeholder="Ex.: Banco do Brasil" />
-              <TextField name="agency" label="Agência" />
-              <TextField name="account" label="Conta" />
-              <SelectField name="type" label="Tipo" options={TYPE_OPTIONS} placeholder="Selecione" required />
-            </div>
-          </Section>
-
-          <Section title="Saldo e status">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField name="initial_balance" label="Saldo inicial" type="number" step="0.01" min="0" />
+              <TextField name="name" label="Nome" placeholder="Ex.: Administrativo" required className="sm:col-span-2" />
               <SelectField name="status" label="Status" options={STATUS_OPTIONS} required />
             </div>
           </Section>

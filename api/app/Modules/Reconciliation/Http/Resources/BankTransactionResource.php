@@ -18,8 +18,8 @@ class BankTransactionResource extends JsonResource
     {
         return [
             'id' => $this->uuid,
-            'cost_center_id' => $this->cost_center_id,
-            'cost_center' => $this->whenLoaded('costCenter', fn () => $this->costCenter?->name),
+            'bank_account_id' => $this->bank_account_id,
+            'bank_account' => $this->whenLoaded('bankAccount', fn () => $this->bankAccount?->name),
             'date' => $this->date?->toDateString(),
             'value' => (float) $this->value,
             'type' => $this->type,

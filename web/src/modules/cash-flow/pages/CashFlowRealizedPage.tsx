@@ -16,7 +16,7 @@ import {
   type Column,
 } from '@/shared/design-system'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useCategoryOptions } from '@/modules/categories/hooks/useCategories'
 import { useRealizedCashFlow } from '../hooks/useCashFlow'
 import type { RealizedEntry } from '../services/cash-flow.service'
@@ -27,16 +27,16 @@ const firstOfMonth = toLocalIsoDate(new Date(new Date().getFullYear(), new Date(
 export default function CashFlowRealizedPage() {
   const [from, setFrom] = useState(firstOfMonth)
   const [to, setTo] = useState(today)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setCostCenterId] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
-  const costCenters = useCostCenterOptions()
+  const bankAccounts = useBankAccountOptions()
   const categories = useCategoryOptions()
 
   const query = useRealizedCashFlow({
     from,
     to,
-    ...(costCenterId ? { cost_center_id: costCenterId } : {}),
+    ...(bankAccountId ? { bank_account_id: bankAccountId } : {}),
     ...(categoryId ? { category_id: categoryId } : {}),
   })
 
@@ -53,7 +53,7 @@ export default function CashFlowRealizedPage() {
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground">{e.description}</p>
           <p className="truncate text-[13px] text-muted">
-            {e.cost_center ?? '—'}
+            {e.bank_account ?? '—'}
             {e.category ? ` · ${e.category}` : ''}
           </p>
         </div>
@@ -94,11 +94,11 @@ export default function CashFlowRealizedPage() {
             />
             <div className="flex flex-wrap items-center gap-2">
             <Select
-              aria-label="Centro de custo"
+              aria-label="Conta bancária"
               className="w-52"
-              value={costCenterId}
+              value={bankAccountId}
               onChange={(e) => setCostCenterId(e.target.value)}
-              options={[{ value: '', label: 'Todos os centros' }, ...(costCenters.data ?? [])]}
+              options={[{ value: '', label: 'Todos os centros' }, ...(bankAccounts.data ?? [])]}
             />
             <Select
               aria-label="Categoria"

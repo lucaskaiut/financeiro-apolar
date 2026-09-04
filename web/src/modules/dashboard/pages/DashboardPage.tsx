@@ -127,7 +127,7 @@ function AccountRow({ account }: { account: DashboardAccount }) {
         <p className="truncate text-sm font-medium text-foreground">{account.description}</p>
         <p className="truncate text-[13px] text-muted">
           {formatDate(account.due_date)}
-          {account.cost_center ? ` · ${account.cost_center}` : ''}
+          {account.bank_account ? ` · ${account.bank_account}` : ''}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -167,13 +167,13 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const user = useSessionStore((state) => state.user)
-  const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
 
-  const { data, isPending } = useDashboardSummary(costCenterId || undefined)
+  const { data, isPending } = useDashboardSummary(bankAccountId || undefined)
 
   const filterOptions = [
     { value: '', label: 'Todos' },
-    ...(data?.cost_centers.map((cc) => ({ value: cc.id, label: cc.name })) ?? []),
+    ...(data?.bank_accounts.map((cc) => ({ value: cc.id, label: cc.name })) ?? []),
   ]
 
   return (
@@ -184,7 +184,7 @@ export default function DashboardPage() {
       />
 
       <PageContent>
-        <SegmentedControl value={costCenterId} options={filterOptions} onChange={setCostCenterId} />
+        <SegmentedControl value={bankAccountId} options={filterOptions} onChange={setBankAccountId} />
 
         {isPending && <DashboardSkeleton />}
 
@@ -202,7 +202,7 @@ export default function DashboardPage() {
         )}
 
         {data && (
-          <div key={costCenterId || 'all'} className="flex flex-col gap-5">
+          <div key={bankAccountId || 'all'} className="flex flex-col gap-5">
             <KpiGrid kpis={data.kpis} />
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -216,15 +216,15 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="mb-3 flex items-center gap-2">
                     <Landmark className="size-4 text-muted" />
-                    <h3 className="text-sm font-semibold text-foreground">Saldo por centro de custo</h3>
+                    <h3 className="text-sm font-semibold text-foreground">Saldo por conta bancária</h3>
                   </div>
-                  {data.balance_by_cost_center.length === 0 ? (
-                    <p className="text-[13px] text-muted">Nenhum centro de custo cadastrado.</p>
+                  {data.balance_by_bank_account.length === 0 ? (
+                    <p className="text-[13px] text-muted">Nenhum conta bancária cadastrado.</p>
                   ) : (
                     <div className="space-y-3">
-                      {data.balance_by_cost_center.map((row) => (
-                        <div key={row.cost_center_id} className="flex items-center justify-between rounded-lg bg-surface-2/60 p-3">
-                          <p className="text-[13px] font-medium text-foreground">{row.cost_center}</p>
+                      {data.balance_by_bank_account.map((row) => (
+                        <div key={row.bank_account_id} className="flex items-center justify-between rounded-lg bg-surface-2/60 p-3">
+                          <p className="text-[13px] font-medium text-foreground">{row.bank_account}</p>
                           <span className={cn('text-[13px] font-semibold tabular-nums', row.balance >= 0 ? 'text-success' : 'text-danger')}>
                             {formatCurrency(row.balance)}
                           </span>

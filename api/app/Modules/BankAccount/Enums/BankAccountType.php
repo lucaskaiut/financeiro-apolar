@@ -1,12 +1,13 @@
 <?php
 
-namespace App\Modules\CostCenter\Enums;
+namespace App\Modules\BankAccount\Enums;
 
-enum CostCenterType: string
+enum BankAccountType: string
 {
     case Checking = 'checking';
     case Savings = 'savings';
     case Investment = 'investment';
+    case CreditCard = 'credit_card';
     case Other = 'other';
 
     public function label(): string
@@ -15,6 +16,7 @@ enum CostCenterType: string
             self::Checking => 'Conta corrente',
             self::Savings => 'Conta poupança',
             self::Investment => 'Investimento',
+            self::CreditCard => 'Cartão de crédito',
             self::Other => 'Outro',
         };
     }

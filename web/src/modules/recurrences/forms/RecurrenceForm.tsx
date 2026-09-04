@@ -16,7 +16,7 @@ import {
 } from '@/shared/design-system'
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
-import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { categoriesService } from '@/modules/categories/services/categories.service'
 import { recurrenceSchema, type RecurrenceFormValues } from '../schemas/recurrence.schema'
 import type { RecurrencePayload } from '../services/recurrences.service'
@@ -46,7 +46,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
       type: 'payable',
       description: '',
       counterparty: '',
-      cost_center_id: '',
+      bank_account_id: '',
       category_id: '',
       subcategory_id: '',
       value: '',
@@ -65,7 +65,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
   const type = form.watch('type')
   const categoryType = type === 'receivable' ? 'income' : 'expense'
 
-  const costCenters = useCostCenterOptions()
+  const costCenters = useBankAccountOptions()
 
   const loadCategories = useCallback(
     async (search: string): Promise<SearchSelectOption[]> => {
@@ -114,7 +114,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
         type: values.type,
         description: values.description,
         counterparty: values.counterparty || null,
-        cost_center_id: values.cost_center_id,
+        bank_account_id: values.bank_account_id,
         category_id: values.category_id,
         subcategory_id: values.subcategory_id || null,
         value: Number(values.value),
@@ -150,7 +150,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField name="description" label="Descrição" required className="sm:col-span-2" />
               <TextField name="counterparty" label={type === 'receivable' ? 'Cliente' : 'Fornecedor'} className="sm:col-span-2" />
-              <SelectField name="cost_center_id" label="Centro de custo" options={costCenters.data ?? []} placeholder="Selecione" required />
+              <SelectField name="bank_account_id" label="Conta bancária" options={costCenters.data ?? []} placeholder="Selecione" required />
               <SearchSelectField
                 name="category_id"
                 label="Categoria"

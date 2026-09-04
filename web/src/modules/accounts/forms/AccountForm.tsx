@@ -18,11 +18,14 @@ import {
 } from '@/shared/design-system'
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
+import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { useCompanyOptions } from '@/modules/companies/hooks/useCompanies'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { categoriesService } from '@/modules/categories/services/categories.service'
 import { accountSchema, type AccountFormValues } from '../schemas/account.schema'
 import type { AccountPayload } from '../services/accounts.service'
 import { PendingDocuments } from '../components/PendingDocuments'
+import { AllocationSection } from '../components/AllocationSection'
 
 interface AccountFormProps {
   mode: 'create' | 'edit'
@@ -39,6 +42,8 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
       type: 'payable',
       description: '',
       counterparty: '',
+      bank_account_id: '',
+      company_id: '',
       cost_center_id: '',
       category_id: '',
       subcategory_id: '',
@@ -47,6 +52,8 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
       expected_date: '',
       paid_date: '',
       observation: '',
+      use_allocations: false,
+      allocations: [],
       installments: false,
       installment_quantity: '2',
       installment_interval: 'monthly',
@@ -59,8 +66,11 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
 
   const type = form.watch('type')
   const installments = form.watch('installments')
+  const useAllocations = form.watch('use_allocations')
   const categoryType = type === 'receivable' ? 'income' : 'expense'
 
+  const bankAccounts = useBankAccountOptions()
+  const companies = useCompanyOptions()
   const costCenters = useCostCenterOptions()
 
   const loadCategories = useCallback(
@@ -105,18 +115,31 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
   }, [])
 
   const handleSubmit = async (values: AccountFormValues) => {
+    const allocations = values.use_allocations
+      ? values.allocations.map((row) => ({
+          cost_center_id: row.cost_center_id || null,
+          company_id: row.company_id || null,
+          category_id: row.category_id,
+          value: row.value === '' ? undefined : Number(row.value),
+          percentage: row.percentage === '' ? undefined : Number(row.percentage),
+        }))
+      : null
+
     const payload: AccountPayload = {
       type: values.type,
       description: values.description,
       counterparty: values.counterparty || null,
-      cost_center_id: values.cost_center_id,
-      category_id: values.category_id,
-      subcategory_id: values.subcategory_id || null,
+      bank_account_id: values.use_allocations ? null : values.bank_account_id,
+      company_id: values.company_id || null,
+      cost_center_id: values.cost_center_id || null,
+      category_id: values.use_allocations ? null : values.category_id,
+      subcategory_id: values.use_allocations ? null : values.subcategory_id || null,
       value: Number(values.value),
       due_date: values.due_date,
       expected_date: values.expected_date || null,
       paid_date: mode === 'edit' ? values.paid_date || null : undefined,
       observation: values.observation || null,
+      allocations,
       installments:
         mode === 'create' && values.installments
           ? { quantity: Number(values.installment_quantity), interval: values.installment_interval }
@@ -157,42 +180,60 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
                 label={type === 'receivable' ? 'Cliente' : 'Fornecedor'}
                 className="sm:col-span-2"
               />
+              {!useAllocations && (
+                <SelectField
+                  name="bank_account_id"
+                  label="Conta bancária"
+                  options={bankAccounts.data ?? []}
+                  placeholder="Selecione"
+                  required
+                />
+              )}
+              <SelectField
+                name="company_id"
+                label="Empresa"
+                options={companies.data ?? []}
+                placeholder="Opcional"
+              />
               <SelectField
                 name="cost_center_id"
                 label="Centro de custo"
                 options={costCenters.data ?? []}
-                placeholder="Selecione"
-                required
+                placeholder="Opcional"
               />
-              <SearchSelectField
-                name="category_id"
-                label="Categoria"
-                loadOptions={loadCategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar categoria..."
-                required
-                onSelectOption={(option) => {
-                  const subcategoryId = form.getValues('subcategory_id')
-                  if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
-                    form.setValue('subcategory_id', '')
-                    setSelectedSubcategory(null)
-                  }
-                }}
-              />
-              <SearchSelectField
-                name="subcategory_id"
-                label="Subcategoria"
-                loadOptions={loadSubcategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar subcategoria..."
-                onSelectOption={(option) => {
-                  setSelectedSubcategory(option)
-                  const categoryId = form.getValues('category_id')
-                  if (option.parent_id && option.parent_id !== categoryId) {
-                    form.setValue('category_id', option.parent_id)
-                  }
-                }}
-              />
+              {!useAllocations && (
+                <>
+                  <SearchSelectField
+                    name="category_id"
+                    label="Categoria"
+                    loadOptions={loadCategories}
+                    resolveLabel={resolveLabel}
+                    placeholder="Buscar categoria..."
+                    required
+                    onSelectOption={(option) => {
+                      const subcategoryId = form.getValues('subcategory_id')
+                      if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
+                        form.setValue('subcategory_id', '')
+                        setSelectedSubcategory(null)
+                      }
+                    }}
+                  />
+                  <SearchSelectField
+                    name="subcategory_id"
+                    label="Subcategoria"
+                    loadOptions={loadSubcategories}
+                    resolveLabel={resolveLabel}
+                    placeholder="Buscar subcategoria..."
+                    onSelectOption={(option) => {
+                      setSelectedSubcategory(option)
+                      const categoryId = form.getValues('category_id')
+                      if (option.parent_id && option.parent_id !== categoryId) {
+                        form.setValue('category_id', option.parent_id)
+                      }
+                    }}
+                  />
+                </>
+              )}
               <TextField
                 name="value"
                 label="Valor"
@@ -215,6 +256,13 @@ export function AccountForm({ mode, defaultValues, submitting, hasSettlement = f
               <TextField name="expected_date" label={type === 'receivable' ? 'Data prevista de recebimento' : 'Data prevista de pagamento'} type="date" />
             </div>
           </Section>
+
+          {mode === 'create' && (
+            <Section title="Rateio" description="Divida o valor entre centros de custo, empresas e categorias.">
+              <SwitchField name="use_allocations" label="Usar rateio neste lançamento" />
+              <AllocationSection />
+            </Section>
+          )}
 
           <Section title="Observação">
             <TextareaField name="observation" rows={3} />

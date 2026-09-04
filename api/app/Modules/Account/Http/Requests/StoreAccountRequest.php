@@ -20,25 +20,44 @@ class StoreAccountRequest extends FormRequest
      */
     public function rules(): array
     {
+        $tenantId = TenantContext::tenantId();
+
         return [
             'type' => ['required', 'string', Rule::in(AccountType::values())],
             'description' => ['required', 'string', 'max:255'],
             'counterparty' => ['nullable', 'string', 'max:255'],
-            'cost_center_id' => [
-                'required',
+            'bank_account_id' => [
+                'nullable',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                'required_without:credit_card_id',
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'credit_card_id' => [
+                'nullable',
+                'string',
+                Rule::exists('credit_cards', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'company_id' => [
+                'nullable',
+                'string',
+                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'cost_center_id' => [
+                'nullable',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'category_id' => [
-                'required',
+                'required_without:allocations',
+                'nullable',
                 'string',
-                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'subcategory_id' => [
                 'nullable',
                 'string',
                 Rule::exists('categories', 'uuid')->where(fn ($q) => $q
-                    ->where('tenant_id', TenantContext::tenantId())
+                    ->where('tenant_id', $tenantId)
                     ->whereNotNull('parent_id')),
             ],
             'value' => ['required', 'numeric', 'gt:0'],
@@ -48,6 +67,29 @@ class StoreAccountRequest extends FormRequest
             'installments' => ['nullable', 'array:quantity,interval'],
             'installments.quantity' => ['required_with:installments', 'integer', 'min:1', 'max:120'],
             'installments.interval' => ['nullable', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
+            'allocations' => ['nullable', 'array', 'min:1'],
+            'allocations.*.cost_center_id' => [
+                'nullable',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'allocations.*.company_id' => [
+                'nullable',
+                'string',
+                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'allocations.*.category_id' => [
+                'nullable',
+                'string',
+                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'allocations.*.subcategory_id' => [
+                'nullable',
+                'string',
+                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
+            ],
+            'allocations.*.value' => ['nullable', 'numeric', 'gt:0'],
+            'allocations.*.percentage' => ['nullable', 'numeric', 'gt:0', 'lte:100'],
         ];
     }
 
