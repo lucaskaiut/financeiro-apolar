@@ -43,6 +43,7 @@ const STATUS_BADGES: Record<BankTransaction['status'], { variant: 'neutral' | 'p
 export default function ReconciliationPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Number(searchParams.get('page') ?? 1)
+  const statusFilter = (searchParams.get('status') ?? 'pending') as 'pending' | 'matched' | 'ignored' | ''
 
   const { can } = usePermissions()
 
@@ -59,7 +60,20 @@ export default function ReconciliationPage() {
   const [matching, setMatching] = useState<BankTransaction | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const query = useReconciliationQuery({ page, per_page: PER_PAGE, status: 'pending' })
+  const query = useReconciliationQuery({
+    page,
+    per_page: PER_PAGE,
+    status: statusFilter || undefined,
+  })
+
+  const setStatusFilter = (status: string) => {
+    setSearchParams((params) => {
+      if (status) params.set('status', status)
+      else params.delete('status')
+      params.delete('page')
+      return params
+    })
+  }
 
   const handleFile = async (file: File | null) => {
     if (!file) return
@@ -173,6 +187,19 @@ export default function ReconciliationPage() {
                 <Upload className="size-4" />
                 {fileName || 'Selecionar arquivo'}
               </label>
+            </div>
+            <div className="min-w-40">
+              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Status</label>
+              <Select
+                aria-label="Status do extrato"
+                value={statusFilter || 'pending'}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                options={[
+                  { value: 'pending', label: 'Pendentes' },
+                  { value: 'matched', label: 'Conciliadas' },
+                  { value: 'ignored', label: 'Ignoradas' },
+                ]}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-[13px] font-medium text-foreground">Período (vencimento)</label>

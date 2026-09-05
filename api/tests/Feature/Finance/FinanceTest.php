@@ -1083,4 +1083,299 @@ OFX;
             FinancialAccount::query()->where('is_card_purchase', true)->whereNotNull('credit_card_invoice_id')->value('status'),
         );
     }
+
+    public function test_unsettle_of_reconciled_settlement_reverses_bank_link(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $accountId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Conta conciliada',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 250,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815</DTPOSTED>
+            <TRNAMT>-250.00</TRNAMT>
+            <FITID>FIT-UNSETTLE-001</FITID>
+            <MEMO>PAGAMENTO</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk();
+
+        $transactionId = $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->json('data.0.id');
+
+        $this->postJson("/api/reconciliation/transactions/{$transactionId}/reconcile", [
+            'account_id' => $accountId,
+        ])->assertOk();
+
+        $settlementId = $this->getJson("/api/accounts/{$accountId}")
+            ->assertOk()
+            ->assertJsonPath('data.is_reconciled', true)
+            ->json('data.settlements.0.id');
+
+        $this->deleteJson("/api/accounts/{$accountId}/settlements/{$settlementId}")->assertOk();
+
+        $this->getJson("/api/accounts/{$accountId}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'open')
+            ->assertJsonPath('data.is_reconciled', false)
+            ->assertJsonPath('data.settled_amount', 0);
+
+        $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_reopen_of_one_account_in_one_to_many_reopens_all_linked_accounts(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $firstId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Parte A',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 300,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $secondId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Parte B',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 700,
+            'due_date' => '2026-08-12',
+            'purchase_date' => '2026-08-12',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815</DTPOSTED>
+            <TRNAMT>-1000.00</TRNAMT>
+            <FITID>FIT-REOPEN-MANY-001</FITID>
+            <MEMO>PAGAMENTO AGRUPADO</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk();
+
+        $transactionId = $this->getJson('/api/reconciliation/transactions?status=pending')
+            ->assertOk()
+            ->json('data.0.id');
+
+        $this->postJson('/api/reconciliation/reconcile-many', [
+            'transactions' => [$transactionId],
+            'accounts' => [$firstId, $secondId],
+        ])->assertOk();
+
+        $this->postJson("/api/accounts/{$firstId}/reopen")->assertOk();
+
+        $this->getJson("/api/accounts/{$firstId}")->assertOk()->assertJsonPath('data.status', 'open')->assertJsonPath('data.is_reconciled', false);
+        $this->getJson("/api/accounts/{$secondId}")->assertOk()->assertJsonPath('data.status', 'open')->assertJsonPath('data.is_reconciled', false);
+        $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_reconcile_many_rejects_nxn_pairs_with_mismatched_values(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $firstId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Conta 80',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 80,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated()->json('data.0.id');
+
+        $secondId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Conta 70',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 70,
+            'due_date' => '2026-08-12',
+            'purchase_date' => '2026-08-12',
+        ])->assertCreated()->json('data.0.id');
+
+        $ofx = <<<OFX
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260815</DTPOSTED>
+            <TRNAMT>-100.00</TRNAMT>
+            <FITID>FIT-NXN-100</FITID>
+            <MEMO>EXTRATO 100</MEMO>
+          </STMTTRN>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260816</DTPOSTED>
+            <TRNAMT>-50.00</TRNAMT>
+            <FITID>FIT-NXN-50</FITID>
+            <MEMO>EXTRATO 50</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk()->assertJsonPath('data.imported', 2);
+
+        $transactionIds = collect($this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->json('data'))
+            ->pluck('id')
+            ->all();
+
+        $this->assertCount(2, $transactionIds);
+
+        $this->postJson('/api/reconciliation/reconcile-many', [
+            'transactions' => $transactionIds,
+            'accounts' => [$firstId, $secondId],
+        ])->assertUnprocessable();
+
+        $this->getJson('/api/accounts/'.$firstId)->assertOk()->assertJsonPath('data.status', 'open');
+        $this->getJson('/api/accounts/'.$secondId)->assertOk()->assertJsonPath('data.status', 'open');
+        $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->assertJsonPath('meta.total', 2);
+    }
+
+    public function test_recurrence_show_returns_bank_account(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $recurrenceId = $this->postJson('/api/recurrences', [
+            'type' => 'payable',
+            'description' => 'Internet',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 200,
+            'frequency' => 'monthly',
+            'start_date' => '2026-01-10',
+            'day_of_month' => 10,
+            'max_occurrences' => 2,
+        ])->assertCreated()->json('data.id');
+
+        $this->getJson("/api/recurrences/{$recurrenceId}")
+            ->assertOk()
+            ->assertJsonPath('data.bank_account_id', $bankAccountId)
+            ->assertJsonPath('data.description', 'Internet');
+
+        $this->getJson('/api/recurrences')
+            ->assertOk()
+            ->assertJsonPath('data.0.bank_account_id', $bankAccountId);
+    }
+
+    public function test_card_purchase_can_be_updated_without_bank_account(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $costCenterId = $this->createCostCenter('Obra A');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Edit',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $accountId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Compra original',
+            'category_id' => $categoryId,
+            'cost_center_id' => $costCenterId,
+            'credit_card_id' => $cardId,
+            'value' => 100,
+            'purchase_date' => '2026-09-04',
+        ])->assertCreated()->json('data.0.id');
+
+        $this->putJson("/api/accounts/{$accountId}", [
+            'description' => 'Compra atualizada',
+            'counterparty' => 'Loja',
+            'category_id' => $categoryId,
+            'cost_center_id' => $costCenterId,
+            'value' => 100,
+            'bank_account_id' => null,
+            'due_date' => null,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.description', 'Compra atualizada')
+            ->assertJsonPath('data.is_card_purchase', true);
+    }
 }

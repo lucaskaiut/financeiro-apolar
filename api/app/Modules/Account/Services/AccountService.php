@@ -9,10 +9,11 @@ use App\Modules\Account\Models\Settlement;
 use App\Modules\CreditCard\Models\CreditCard;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\CreditCard\Services\CreditCardService;
+use App\Modules\Reconciliation\Models\BankTransaction;
+use App\Modules\Reconciliation\Models\Reconciliation;
 use App\Modules\Shared\Support\DateOnly;
 use App\Modules\User\Models\User;
 use Carbon\Carbon;
-use App\Modules\Reconciliation\Models\Reconciliation;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -235,6 +236,14 @@ class AccountService
 
         unset($data['allocations']);
 
+        if ($account->is_card_purchase) {
+            unset($data['bank_account_id'], $data['type'], $data['credit_card_id']);
+
+            if (array_key_exists('due_date', $data) && $data['due_date'] === null) {
+                unset($data['due_date']);
+            }
+        }
+
         $paidDateProvided = array_key_exists('paid_date', $data);
         $paidDate = $data['paid_date'] ?? null;
         unset($data['paid_date']);
@@ -302,10 +311,24 @@ class AccountService
 
     public function unsettle(FinancialAccount $account, Settlement $settlement): void
     {
-        $settlement->delete();
+        DB::transaction(function () use ($account, $settlement): void {
+            if ($settlement->reconciliation_id !== null) {
+                $reconciliation = Reconciliation::query()
+                    ->whereKey($settlement->reconciliation_id)
+                    ->first();
 
-        $this->recomputeStatus($account);
-        $this->syncCardInvoicePaymentState($account->refresh());
+                if ($reconciliation !== null) {
+                    // C1/C2: baixa de conciliação desfaz o grupo inteiro do extrato (1→N incluso).
+                    $this->reverseBankTransaction((int) $reconciliation->bank_transaction_id);
+
+                    return;
+                }
+            }
+
+            $settlement->delete();
+            $this->recomputeStatus($account);
+            $this->syncCardInvoicePaymentState($account->refresh());
+        });
     }
 
     /**
@@ -329,38 +352,24 @@ class AccountService
         $settlementsRemoved = $settlements->count();
 
         return DB::transaction(function () use ($account, $settlements, $reversedAmount, $settlementsRemoved): array {
-            $reconciliationsReversed = 0;
-
-            $reconciliationIds = $settlements
-                ->pluck('reconciliation_id')
-                ->filter()
+            $transactionIds = Reconciliation::query()
+                ->whereIn('id', $settlements->pluck('reconciliation_id')->filter()->unique()->values())
+                ->pluck('bank_transaction_id')
                 ->unique()
                 ->values();
 
-            foreach ($reconciliationIds as $reconciliationId) {
-                $reconciliation = Reconciliation::query()
-                    ->with('bankTransaction')
-                    ->whereKey($reconciliationId)
-                    ->whereNull('reversed_at')
-                    ->first();
+            $reconciliationsReversed = 0;
 
-                if ($reconciliation === null) {
-                    continue;
-                }
-
-                $reconciliation->reversed_at = now();
-                $reconciliation->save();
-                $reconciliationsReversed++;
-
-                $transaction = $reconciliation->bankTransaction;
-
-                if ($transaction !== null) {
-                    $transaction->status = 'pending';
-                    $transaction->save();
-                }
+            foreach ($transactionIds as $transactionId) {
+                $reconciliationsReversed += $this->reverseBankTransaction((int) $transactionId);
             }
 
-            $account->settlements()->delete();
+            // Baixas manuais remanescentes nesta conta (sem vínculo de conciliação).
+            $manualRemaining = $account->settlements()->count();
+            if ($manualRemaining > 0) {
+                $account->settlements()->delete();
+            }
+
             $this->markUnreconciled($account);
             $this->recomputeStatus($account->refresh());
             $this->syncCardInvoicePaymentState($account);
@@ -371,6 +380,51 @@ class AccountService
                 'reversed_amount' => $reversedAmount,
                 'reconciliations_reversed' => $reconciliationsReversed,
             ];
+        });
+    }
+
+    /**
+     * Desfaz todas as conciliações ativas de um extrato e reabre as contas vinculadas.
+     */
+    public function reverseBankTransaction(int|BankTransaction $transaction): int
+    {
+        $transaction = $transaction instanceof BankTransaction
+            ? $transaction
+            : BankTransaction::query()->findOrFail($transaction);
+
+        return DB::transaction(function () use ($transaction): int {
+            $reconciliations = Reconciliation::query()
+                ->where('bank_transaction_id', $transaction->getKey())
+                ->whereNull('reversed_at')
+                ->get();
+
+            if ($reconciliations->isEmpty()) {
+                return 0;
+            }
+
+            foreach ($reconciliations as $reconciliation) {
+                Settlement::query()
+                    ->where('reconciliation_id', $reconciliation->getKey())
+                    ->delete();
+
+                $linkedAccount = FinancialAccount::query()->find($reconciliation->account_id);
+
+                if ($linkedAccount !== null) {
+                    $this->markUnreconciled($linkedAccount);
+                    $this->recomputeStatus($linkedAccount);
+                    $this->syncCardInvoicePaymentState($linkedAccount->refresh());
+                }
+
+                $reconciliation->reversed_at = now();
+                $reconciliation->save();
+            }
+
+            if ($transaction->status === 'matched') {
+                $transaction->status = 'pending';
+                $transaction->save();
+            }
+
+            return $reconciliations->count();
         });
     }
 

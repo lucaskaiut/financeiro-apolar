@@ -135,20 +135,17 @@ export function AccountForm({
   }, [])
 
   const handleSubmit = async (values: AccountFormValues) => {
-    const hasCreditCard = Boolean(values.credit_card_id)
+    const hasCreditCard = Boolean(values.credit_card_id) || isCardPurchase
 
     const payload: AccountPayload = {
       type: hasCreditCard ? 'payable' : values.type,
       description: values.description,
       counterparty: values.counterparty || null,
-      bank_account_id: hasCreditCard ? null : values.bank_account_id || null,
-      credit_card_id: hasCreditCard ? values.credit_card_id : null,
       company_id: values.company_id || null,
       cost_center_id: values.cost_center_id || null,
       category_id: values.category_id,
       subcategory_id: values.subcategory_id || null,
       value: Number(values.value),
-      due_date: hasCreditCard ? null : values.due_date,
       purchase_date: values.purchase_date || null,
       expected_date: values.expected_date || null,
       paid_date: mode === 'edit' ? values.paid_date || null : undefined,
@@ -159,6 +156,18 @@ export function AccountForm({
             ? { quantity: Number(values.installment_quantity) }
             : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
           : null,
+    }
+
+    if (hasCreditCard) {
+      payload.credit_card_id = values.credit_card_id || null
+      // Mantém o vencimento já calculado do ciclo; não envia null (evita 422 no update).
+      if (values.due_date) {
+        payload.due_date = values.due_date
+      }
+    } else {
+      payload.bank_account_id = values.bank_account_id || null
+      payload.credit_card_id = null
+      payload.due_date = values.due_date
     }
 
     try {

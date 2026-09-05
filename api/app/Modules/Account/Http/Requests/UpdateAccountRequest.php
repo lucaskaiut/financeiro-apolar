@@ -3,6 +3,7 @@
 namespace App\Modules\Account\Http\Requests;
 
 use App\Modules\Account\Enums\AccountType;
+use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Category\Models\Category;
 use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
@@ -21,15 +22,28 @@ class UpdateAccountRequest extends FormRequest
      */
     public function rules(): array
     {
+        $account = $this->route('account');
+        $isCardPurchase = $account instanceof FinancialAccount && (bool) $account->is_card_purchase;
+
         return [
             'type' => ['sometimes', 'required', 'string', Rule::in(AccountType::values())],
             'description' => ['sometimes', 'required', 'string', 'max:255'],
             'counterparty' => ['nullable', 'string', 'max:255'],
             'bank_account_id' => [
                 'sometimes',
-                'required',
+                $isCardPurchase ? 'nullable' : 'required',
                 'string',
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
+            'company_id' => [
+                'nullable',
+                'string',
+                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
+            'cost_center_id' => [
+                'nullable',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
             'category_id' => [
                 'sometimes',
@@ -45,7 +59,7 @@ class UpdateAccountRequest extends FormRequest
                     ->whereNotNull('parent_id')),
             ],
             'value' => ['sometimes', 'required', 'numeric', 'gt:0'],
-            'due_date' => ['sometimes', 'required', 'date'],
+            'due_date' => ['sometimes', $isCardPurchase ? 'nullable' : 'required', 'date'],
             'purchase_date' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'paid_date' => ['nullable', 'date'],
@@ -61,6 +75,16 @@ class UpdateAccountRequest extends FormRequest
 
         if ($this->exists('paid_date') && $this->input('paid_date') === '') {
             $this->merge(['paid_date' => null]);
+        }
+
+        $account = $this->route('account');
+        if ($account instanceof FinancialAccount && $account->is_card_purchase) {
+            // Compra no cartão: não exigir/alterar conta bancária; null de due_date é ignorado.
+            $this->request->remove('bank_account_id');
+
+            if ($this->exists('due_date') && blank($this->input('due_date'))) {
+                $this->request->remove('due_date');
+            }
         }
 
         $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date', 'paid_date']);

@@ -174,14 +174,20 @@ class CreditCardService
                 ->where('credit_card_id', $creditCard->uuid)
                 ->where('is_card_purchase', true)
                 ->whereNull('credit_card_invoice_id')
+                ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
                 ->whereDate('due_date', $dueDate->toDateString())
+                ->withSum('settlements', 'value')
                 ->get();
 
             if ($purchases->isEmpty()) {
                 throw new InvalidArgumentException('Não há compras pendentes para fechar a fatura.');
             }
 
-            $total = round((float) $purchases->sum('value'), 2);
+            $total = round($purchases->sum(fn (FinancialAccount $purchase) => $purchase->remaining_amount), 2);
+
+            if ($total <= 0) {
+                throw new InvalidArgumentException('Não há saldo pendente nas compras para fechar a fatura.');
+            }
 
             $payable = FinancialAccount::query()->create([
                 'type' => AccountType::Payable,

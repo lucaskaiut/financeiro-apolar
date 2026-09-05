@@ -36,7 +36,7 @@ class RecurrenceController extends ApiController
     {
         $this->authorize('view', $recurrence);
 
-        return $this->success(RecurrenceResource::make($recurrence->load(['costCenter:id,uuid,name', 'category:id,uuid,name', 'subcategory:id,uuid,name'])));
+        return $this->success(RecurrenceResource::make($recurrence->load(['bankAccount:id,uuid,name', 'category:id,uuid,name', 'subcategory:id,uuid,name'])));
     }
 
     public function store(StoreRecurrenceRequest $request): JsonResponse

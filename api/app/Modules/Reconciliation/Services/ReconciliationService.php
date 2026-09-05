@@ -228,8 +228,29 @@ class ReconciliationService
                 throw new InvalidArgumentException('Para conciliar vários extratos com várias contas, as quantidades devem ser iguais.');
             }
 
-            foreach ($transactions->values() as $i => $transaction) {
-                $account = $accounts->values()->get($i);
+            $availableAccounts = $accounts->values()->all();
+
+            foreach ($transactions->values() as $transaction) {
+                $txValue = round((float) $transaction->value, 2);
+                $matchIndex = null;
+
+                foreach ($availableAccounts as $index => $account) {
+                    if (abs($account->remaining_amount - $txValue) < 0.01) {
+                        $matchIndex = $index;
+                        break;
+                    }
+                }
+
+                if ($matchIndex === null) {
+                    throw new InvalidArgumentException(
+                        'Não foi possível emparelhar extratos e contas com o mesmo valor. Use conciliação 1→N ou N→1.',
+                    );
+                }
+
+                $account = $availableAccounts[$matchIndex];
+                unset($availableAccounts[$matchIndex]);
+                $availableAccounts = array_values($availableAccounts);
+
                 $this->link($transaction, $account, $user, $account->remaining_amount);
             }
         });
@@ -339,34 +360,11 @@ class ReconciliationService
      */
     public function undo(BankTransaction $transaction): void
     {
-        $reconciliations = Reconciliation::query()
-            ->where('bank_transaction_id', $transaction->getKey())
-            ->whereNull('reversed_at')
-            ->get();
+        $reversed = $this->accounts->reverseBankTransaction($transaction);
 
-        if ($reconciliations->isEmpty()) {
+        if ($reversed === 0) {
             throw new InvalidArgumentException('Transação não possui conciliação ativa.');
         }
-
-        DB::transaction(function () use ($transaction, $reconciliations): void {
-            foreach ($reconciliations as $reconciliation) {
-                Settlement::query()->where('reconciliation_id', $reconciliation->getKey())->delete();
-
-                $account = $reconciliation->account;
-
-                if ($account !== null) {
-                    $this->accounts->markUnreconciled($account);
-                    $this->accounts->recomputeStatus($account);
-                    $this->accounts->syncCardInvoicePaymentState($account);
-                }
-
-                $reconciliation->reversed_at = now();
-                $reconciliation->save();
-            }
-
-            $transaction->status = 'pending';
-            $transaction->save();
-        });
     }
 
     private function link(
