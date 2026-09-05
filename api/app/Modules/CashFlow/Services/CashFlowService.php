@@ -26,18 +26,11 @@ class CashFlowService
         );
 
         $settlements = Settlement::query()
-            ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name,type'])
+            ->countingFinancially()
+            ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name,type', 'account.creditCard:id,uuid,bank_account_id,name'])
             ->whereDate('settled_at', '>=', $fromDate->toDateString())
             ->whereDate('settled_at', '<=', $toDate->toDateString())
-            ->where(function ($query): void {
-                $query->whereNull('method')
-                    ->orWhere('method', '!=', 'credit_card_invoice');
-            })
-            ->whereHas('account', fn ($a) => $a->where(function ($query): void {
-                $query->where('is_card_purchase', false)
-                    ->orWhere('is_card_invoice_payable', true);
-            }))
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
+            ->forBankAccount($bankAccountId)
             ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
             ->orderBy('settled_at')
             ->get();
@@ -111,14 +104,13 @@ class CashFlowService
         }
 
         $base = fn () => FinancialAccount::query()
-            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type'])
+            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type', 'creditCard:id,uuid,bank_account_id'])
             ->withSum('settlements', 'value')
             ->whereIn('status', ['open', 'partial'])
-            // Compras do cartão não afetam caixa bancário; só a fatura.
-            ->where('is_card_purchase', false)
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->whereDate('due_date', '>=', $fromDate->toDateString())
             ->whereDate('due_date', '<=', $toDate->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
             ->when($accountType, fn ($q) => $q->where('type', $accountType));
 
         $futureAccounts = $base()->whereNull('recurrence_id')->whereNull('transfer_id')->whereNull('installment_group_id')->get();
@@ -201,17 +193,10 @@ class CashFlowService
     private function netSettled(Carbon $upTo, ?string $bankAccountId, ?string $categoryId): float
     {
         $base = fn () => Settlement::query()
+            ->countingFinancially()
             ->whereDate('settled_at', '<=', $upTo->toDateString())
-            ->where(function ($query): void {
-                $query->whereNull('method')
-                    ->orWhere('method', '!=', 'credit_card_invoice');
-            })
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('bank_account_id', $bankAccountId)))
-            ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)))
-            ->whereHas('account', fn ($a) => $a->where(function ($query): void {
-                $query->where('is_card_purchase', false)
-                    ->orWhere('is_card_invoice_payable', true);
-            }));
+            ->forBankAccount($bankAccountId)
+            ->when($categoryId, fn ($q) => $q->whereHas('account', fn ($a) => $a->where('category_id', $categoryId)));
 
         $in = (float) $base()->whereHas('account', fn ($a) => $a->where('type', AccountType::Receivable->value))->sum('value');
         $out = (float) $base()->whereHas('account', fn ($a) => $a->where('type', AccountType::Payable->value))->sum('value');

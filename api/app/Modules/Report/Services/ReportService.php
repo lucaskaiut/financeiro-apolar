@@ -30,9 +30,10 @@ class ReportService
         $date = $date ? Carbon::parse($date) : now();
 
         $settlements = Settlement::query()
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name'])
             ->whereDate('settled_at', $date->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->orderBy('settled_at')
             ->get();
 
@@ -106,10 +107,11 @@ class ReportService
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfWeek();
 
         $settlements = Settlement::query()
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->with(['account.costCenter:id,uuid,name'])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         $totalPaid = 0.0;
@@ -297,10 +299,10 @@ class ReportService
             ->with(['bankAccount:id,uuid,name'])
             ->withSum('settlements', 'value')
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-            ->where('is_card_purchase', false)
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->whereDate('due_date', '>=', $fromDate->toDateString())
-            ->whereDate('due_date', '<=', $toDate->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId));
+            ->whereDate('due_date', '<=', $toDate->toDateString());
 
         $futureAccounts = $base()->whereNull('recurrence_id')->whereNull('transfer_id')->whereNull('installment_group_id')->get();
         $installments = $base()->whereNotNull('installment_group_id')->get();
@@ -470,6 +472,8 @@ class ReportService
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
 
         $settlements = Settlement::query()
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->with([
                 'account.category:id,uuid,name,type',
                 'account.subcategory:id,uuid,name',
@@ -477,7 +481,6 @@ class ReportService
             ])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         $expense = [];
@@ -779,10 +782,11 @@ class ReportService
         }
 
         $settlements = Settlement::query()
-            ->with(['account.category:id,uuid,name,type', 'account.costCenter:id,uuid,name'])
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
+            ->with(['account.category:id,uuid,name,type', 'account.costCenter:id,uuid,name', 'account.creditCard:id,uuid,bank_account_id'])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
-            ->when($bankAccountId, fn ($q) => $q->whereHas('account', fn ($accountQuery) => $accountQuery->where('bank_account_id', $bankAccountId)))
             ->get();
 
         foreach ($settlements as $settlement) {
@@ -799,11 +803,13 @@ class ReportService
                 continue;
             }
 
-            $rowKey = $account->bank_account_id ?? '__none__';
+            $rowKey = $account->bank_account_id
+                ?? $account->creditCard?->bank_account_id
+                ?? '__none__';
 
             if (! isset($rowsMap[$rowKey])) {
                 $rowsMap[$rowKey] = [
-                    'bank_account_id' => $account->bank_account_id,
+                    'bank_account_id' => $account->bank_account_id ?? $account->creditCard?->bank_account_id,
                     'bank_account' => $this->defaultCostCenterLabel($account->costCenter?->name),
                     'amounts' => array_fill_keys($monthKeys, 0.0),
                     'total' => 0.0,
@@ -864,11 +870,31 @@ class ReportService
 
         foreach ($costCenters as $costCenter) {
             $income = (float) Settlement::query()
-                ->whereHas('account', fn ($q) => $q->where('bank_account_id', $costCenter->uuid)->where('type', AccountType::Receivable->value))
+                ->countingFinancially()
+                ->whereHas('account', function ($q) use ($costCenter): void {
+                    $q->where('type', AccountType::Receivable->value)
+                        ->where(function ($inner) use ($costCenter): void {
+                            $inner->where('bank_account_id', $costCenter->uuid)
+                                ->orWhere(function ($card) use ($costCenter): void {
+                                    $card->where('is_card_purchase', true)
+                                        ->whereHas('creditCard', fn ($c) => $c->where('bank_account_id', $costCenter->uuid));
+                                });
+                        });
+                })
                 ->sum('value');
 
             $expense = (float) Settlement::query()
-                ->whereHas('account', fn ($q) => $q->where('bank_account_id', $costCenter->uuid)->where('type', AccountType::Payable->value))
+                ->countingFinancially()
+                ->whereHas('account', function ($q) use ($costCenter): void {
+                    $q->where('type', AccountType::Payable->value)
+                        ->where(function ($inner) use ($costCenter): void {
+                            $inner->where('bank_account_id', $costCenter->uuid)
+                                ->orWhere(function ($card) use ($costCenter): void {
+                                    $card->where('is_card_purchase', true)
+                                        ->whereHas('creditCard', fn ($c) => $c->where('bank_account_id', $costCenter->uuid));
+                                });
+                        });
+                })
                 ->sum('value');
 
             $rows[] = [
@@ -951,8 +977,8 @@ class ReportService
             ->withSum('settlements', 'value')
             ->where('type', AccountType::Payable)
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-            ->where('is_card_purchase', false)
-            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
             ->whereDate('due_date', '<=', $to->toDateString())
             ->when($from, fn ($q) => $q->where(function ($inner) use ($from, $today): void {
                 $inner->whereDate('due_date', '>=', $from->toDateString())

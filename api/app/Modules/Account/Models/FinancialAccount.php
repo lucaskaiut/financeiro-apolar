@@ -174,11 +174,38 @@ class FinancialAccount extends Model
 
     public function countsForBankBalance(Settlement $settlement): bool
     {
-        if ($settlement->method === 'credit_card_invoice') {
-            return false;
+        return ! $this->is_card_invoice_payable;
+    }
+
+    /**
+     * Contas que entram em provisão, projetado e abertos financeiros.
+     * Exclui o payable da fatura (agregador de conciliação).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<FinancialAccount>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<FinancialAccount>
+     */
+    public function scopeCountingFinancially($query)
+    {
+        return $query->where('is_card_invoice_payable', false);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<FinancialAccount>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<FinancialAccount>
+     */
+    public function scopeForBankAccount($query, ?string $bankAccountId)
+    {
+        if ($bankAccountId === null || $bankAccountId === '') {
+            return $query;
         }
 
-        return ! $this->is_card_purchase || $this->is_card_invoice_payable;
+        return $query->where(function ($inner) use ($bankAccountId): void {
+            $inner->where('bank_account_id', $bankAccountId)
+                ->orWhere(function ($card) use ($bankAccountId): void {
+                    $card->where('is_card_purchase', true)
+                        ->whereHas('creditCard', fn ($c) => $c->where('bank_account_id', $bankAccountId));
+                });
+        });
     }
 
     public function getSettledAmountAttribute(): float

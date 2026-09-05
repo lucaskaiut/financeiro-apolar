@@ -1022,6 +1022,35 @@ OFX;
 
         $cashFlow = $this->getJson('/api/cash-flow/realized?from=2026-10-01&to=2026-10-31')->assertOk()->json('data');
         $this->assertEqualsWithDelta(1500, $cashFlow['total_out'], 0.01);
+        $this->assertCount(2, $cashFlow['entries']);
+        $this->assertTrue(collect($cashFlow['entries'])->every(
+            fn (array $entry) => ! str_contains($entry['description'], 'Fatura'),
+        ));
+
+        // Em todos os totais: compras (1500), nunca fatura + compras (3000) nem só a fatura agregada.
+        $daily = $this->getJson('/api/reports/daily?date=2026-10-05')->assertOk()->json('data');
+        $this->assertEqualsWithDelta(1500, $daily['total_paid'], 0.01);
+        $this->assertCount(2, $daily['payments']);
+        $this->assertTrue(collect($daily['payments'])->every(
+            fn (array $payment) => ! str_contains($payment['description'], 'Fatura'),
+        ));
+
+        $weekly = $this->getJson('/api/reports/weekly?from=2026-10-01&to=2026-10-31')->assertOk()->json('data');
+        $this->assertEqualsWithDelta(1500, $weekly['total_paid'], 0.01);
+
+        $byCategory = $this->getJson('/api/reports/by-category?from=2026-10-01&to=2026-10-31')->assertOk()->json('data');
+        $expenseTotal = collect($byCategory['expense'])->sum('total');
+        $this->assertEqualsWithDelta(1500, $expenseTotal, 0.01);
+
+        $balanceRows = $this->getJson('/api/reports/by-cost-center')->assertOk()->json('data.rows');
+        $bankRow = collect($balanceRows)->firstWhere('bank_account_id', $bankAccountId);
+        $this->assertNotNull($bankRow);
+        $this->assertEqualsWithDelta(1500, $bankRow['expense'], 0.01);
+
+        $filteredCash = $this->getJson("/api/cash-flow/realized?from=2026-10-01&to=2026-10-31&bank_account_id={$bankAccountId}")
+            ->assertOk()
+            ->json('data');
+        $this->assertEqualsWithDelta(1500, $filteredCash['total_out'], 0.01);
     }
 
     public function test_credit_card_purchase_supports_installments(): void
