@@ -6,6 +6,7 @@ use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\Account\Support\XlsxRowReader;
 use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Category\Enums\CategoryType;
@@ -16,6 +17,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Normalizer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\IReader;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -50,10 +52,7 @@ class AccountImportService
      */
     public function importXlsx(UploadedFile $file, string $bankAccountId, User $user, ?string $costCenterId = null): array
     {
-        $spreadsheet = IOFactory::load($file->getRealPath());
-        $sheet = $this->resolveSheet($spreadsheet);
-        $rows = $this->extractRows($sheet);
-        $spreadsheet->disconnectWorksheets();
+        $rows = $this->readRows($file->getRealPath());
 
         if (count($rows) < 2) {
             throw new RuntimeException('A planilha não possui linhas de dados.');
@@ -161,6 +160,65 @@ class AccountImportService
         return ['imported' => $imported, 'skipped' => $skipped];
     }
 
+    /**
+     * @return list<list<mixed>>
+     */
+    private function readRows(string $path): array
+    {
+        if (XlsxRowReader::canRead($path)) {
+            return (new XlsxRowReader)->read($path);
+        }
+
+        return $this->readRowsWithPhpSpreadsheet($path);
+    }
+
+    /**
+     * Fallback para .xls e arquivos que o ZipArchive não abre.
+     *
+     * @return list<list<mixed>>
+     */
+    private function readRowsWithPhpSpreadsheet(string $path): array
+    {
+        $reader = IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+        $reader->setReadEmptyCells(false);
+
+        if (method_exists($reader, 'setIgnoreRowsWithNoCells')) {
+            $reader->setIgnoreRowsWithNoCells(true);
+        }
+
+        $names = $reader->listWorksheetNames($path);
+        $preferred = $this->preferredSheetName($names);
+
+        if ($preferred !== null) {
+            $reader->setLoadSheetsOnly([$preferred]);
+        }
+
+        $spreadsheet = $reader->load($path, IReader::READ_DATA_ONLY | IReader::IGNORE_EMPTY_CELLS | IReader::IGNORE_ROWS_WITH_NO_CELLS);
+        $sheet = $preferred !== null
+            ? ($spreadsheet->getSheetByName($preferred) ?? $spreadsheet->getActiveSheet())
+            : $this->resolveSheet($spreadsheet);
+        $rows = $this->extractRows($sheet);
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<string>  $names
+     */
+    private function preferredSheetName(array $names): ?string
+    {
+        foreach ($names as $name) {
+            if ($this->normalize($name) === 'base de dados') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
     private function resolveSheet(Spreadsheet $spreadsheet): Worksheet
     {
         foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
@@ -197,7 +255,7 @@ class AccountImportService
     private function extractRows(Worksheet $sheet): array
     {
         $highestColumn = $sheet->getHighestDataColumn();
-        $highestRow = min($sheet->getHighestDataRow(), 100000);
+        $highestRow = min($sheet->getHighestDataRow(), 20000);
         $rows = [];
         $emptyStreak = 0;
 
