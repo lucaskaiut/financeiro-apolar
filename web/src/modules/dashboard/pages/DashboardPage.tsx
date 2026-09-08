@@ -168,15 +168,28 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const user = useSessionStore((state) => state.user)
   const [costCenterId, setCostCenterId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
 
-  const { data, isPending } = useDashboardSummary(costCenterId || undefined)
+  const { data, isPending } = useDashboardSummary(costCenterId || undefined, bankAccountId || undefined)
 
-  const filterOptions = [
+  const costCenterOptions = [
     { value: '', label: 'Todos' },
     ...(data?.cost_centers.map((cc) => ({ value: cc.id, label: cc.name })) ?? []),
   ]
 
-  const accountsQuery = costCenterId ? `&cost_center_id=${costCenterId}` : ''
+  const bankAccountOptions = [
+    { value: '', label: 'Todas' },
+    ...(data?.bank_accounts.map((ba) => ({ value: ba.id, label: ba.name })) ?? []),
+  ]
+
+  const accountsQuery = [
+    costCenterId ? `cost_center_id=${costCenterId}` : '',
+    bankAccountId ? `bank_account_id=${bankAccountId}` : '',
+  ]
+    .filter(Boolean)
+    .join('&')
+  const accountsQuerySuffix = accountsQuery ? `&${accountsQuery}` : ''
+  const accountsQueryString = accountsQuery ? `?${accountsQuery}` : ''
 
   return (
     <Page>
@@ -186,7 +199,16 @@ export default function DashboardPage() {
       />
 
       <PageContent>
-        <SegmentedControl value={costCenterId} options={filterOptions} onChange={setCostCenterId} />
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="mb-1.5 text-[13px] font-medium text-muted">Centro de custo</p>
+            <SegmentedControl value={costCenterId} options={costCenterOptions} onChange={setCostCenterId} />
+          </div>
+          <div>
+            <p className="mb-1.5 text-[13px] font-medium text-muted">Conta bancária</p>
+            <SegmentedControl value={bankAccountId} options={bankAccountOptions} onChange={setBankAccountId} />
+          </div>
+        </div>
 
         {isPending && <DashboardSkeleton />}
 
@@ -204,7 +226,7 @@ export default function DashboardPage() {
         )}
 
         {data && (
-          <div key={costCenterId || 'all'} className="flex flex-col gap-5">
+          <div key={`${costCenterId}-${bankAccountId}`} className="flex flex-col gap-5">
             <KpiGrid kpis={data.kpis} />
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -258,7 +280,7 @@ export default function DashboardPage() {
                       <AlertTriangle className="size-4 text-danger" />
                       Lançamentos vencidos
                     </h2>
-                    <ButtonLink to={`/accounts?overdue=1&type=payable${accountsQuery}`} variant="ghost" size="sm">
+                    <ButtonLink to={`/accounts?overdue=1&type=payable${accountsQuerySuffix}`} variant="ghost" size="sm">
                       Ver todos
                     </ButtonLink>
                   </div>
@@ -281,7 +303,7 @@ export default function DashboardPage() {
                       <CalendarClock className="size-4 text-primary" />
                       Próximos vencimentos
                     </h2>
-                    <ButtonLink to={`/accounts${costCenterId ? `?cost_center_id=${costCenterId}` : ''}`} variant="ghost" size="sm">
+                    <ButtonLink to={`/accounts${accountsQueryString}`} variant="ghost" size="sm">
                       Ver todos
                     </ButtonLink>
                   </div>

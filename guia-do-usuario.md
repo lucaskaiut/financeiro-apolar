@@ -82,7 +82,7 @@ No canto superior direito:
 | | Assistente de IA | Perguntas em linguagem natural sobre o financeiro |
 | **Financeiro** | Fluxo realizado | Entradas e saídas que já aconteceram |
 | | Fluxo projetado | Previsão de entradas e saídas futuras |
-| | Contas a pagar/receber | Lançamentos (pagar, receber, baixar, parcelar) |
+| | Contas a pagar/receber | Lançamentos (pagar, receber, baixar, parcelar, ratear) |
 | | Recorrências | Contas que se repetem automaticamente |
 | | Transferências | Movimentar valor entre contas bancárias |
 | | Conciliação | Conferir extrato OFX com os lançamentos |
@@ -119,6 +119,8 @@ Tipos: **Conta corrente**, **Conta poupança**, **Investimento** e **Outro**.
 
 Não substitui a conta bancária. No lançamento o centro de custo é **opcional**. Serve para saber *quem* gerou a despesa ou receita, não *de onde saiu o dinheiro*.
 
+Quando uma mesma compra atende mais de uma área, use o **rateio**: cada fatia pode ter um centro de custo diferente, sem criar várias contas.
+
 ### Empresa
 
 Cadastro simples (nome e status) para vincular o lançamento a uma empresa do grupo, quando a organização precisa dessa classificação. Também é **opcional**. Não confunda com a organização (tenant) em que você está logado.
@@ -131,11 +133,13 @@ Dizem **o que** é o movimento: aluguel, folha, energia, vendas, etc.
 - Subcategoria herda o tipo da categoria pai
 - Cores (Índigo, Azul, Verde, Âmbar, Vermelho, Roxo, Cinza) ajudam na leitura dos gráficos
 
-Todo lançamento precisa de **categoria**. Subcategoria é opcional.
+Todo lançamento precisa de **categoria** — no cabeçalho, ou em cada linha se você usar **rateio**. Subcategoria é opcional.
 
 ### Lançamento (conta a pagar ou a receber)
 
 É o compromisso financeiro: o que você deve pagar ou o que espera receber. Tem vencimento, valor, status e, quando pago/recebido, uma **baixa**.
+
+Um lançamento é **um** compromisso com o banco (um boleto, um débito no extrato). Se a nota mistura categorias ou centros de custo, o valor pode ser **rateado** em várias fatias — a conciliação continua vendo uma conta só.
 
 ### Cartão de crédito
 
@@ -153,15 +157,19 @@ Move dinheiro de uma conta bancária para outra. Não é receita nem despesa ope
 
 A saudação mostra seu primeiro nome e o texto *Visão geral da saúde financeira.*
 
-### Filtro por conta
+### Filtro por centro de custo
 
-No topo, um seletor permite ver **Todos** ou uma conta bancária específica. Os números e gráficos acompanham o filtro.
+No topo, um seletor permite ver **Todos** ou um centro de custo. Os números e gráficos acompanham o filtro. Em lançamentos **rateados**, entra só a fatia daquele centro — não o valor inteiro da conta.
+
+### Filtro por conta bancária
+
+Logo abaixo, o mesmo tipo de seletor permite ver **Todas** as contas ou uma conta bancária. Os indicadores, vencidos e saldos passam a considerar só aquela conta. Os dois filtros podem ser combinados.
 
 ### Indicadores (KPIs)
 
 | Indicador | Significado |
 |-----------|-------------|
-| **Saldo atual** | Saldo consolidado das contas (ou da conta filtrada) |
+| **Saldo atual** | Saldo consolidado das contas (ou da fatia do centro de custo filtrado) |
 | **Saídas do mês** | Despesas já realizadas no mês corrente |
 | **A pagar (em aberto)** | Total ainda não liquidado de contas a pagar |
 | **Vencidas** | Valor em atraso e quantidade de lançamentos atrasados |
@@ -170,7 +178,7 @@ No topo, um seletor permite ver **Todos** ou uma conta bancária específica. Os
 
 - **Contas a pagar dos próximos 7 dias** — o que vence em breve
 - **Saldo por conta bancária** — saldo de cada conta
-- **Despesas por categoria** — onde o dinheiro está sendo gasto
+- **Despesas por categoria** — onde o dinheiro está sendo gasto (lançamentos rateados entram na categoria de cada fatia)
 - **Lançamentos vencidos** — atrasos, com atalho **Ver todos** para a lista filtrada
 - **Próximos vencimentos** — horizonte de 30 dias
 
@@ -283,7 +291,7 @@ No cabeçalho:
 
 **Colunas:** Lançamento, Valor, Data da compra, Vencimento, Data da baixa, Status, Ações.
 
-Parcelas aparecem com badge no formato `n/total` (ex.: 2/12).
+Parcelas aparecem com badge no formato `n/total` (ex.: 2/12). Lançamentos rateados mostram o badge **Rateio** e, na linha, as categorias das fatias.
 
 ### 7.2 Status do lançamento
 
@@ -321,15 +329,16 @@ Campos principais:
 | Cartão de crédito | Só na criação. Padrão: *Nenhum (fluxo normal)* |
 | Conta bancária | Obrigatória no fluxo normal (sem cartão) |
 | Empresa | Opcional |
-| Centro de custo | Opcional |
-| Categoria | Obrigatória |
-| Subcategoria | Opcional |
-| Valor | Obrigatório |
+| Centro de custo | Opcional no cabeçalho. Some daqui se o rateio estiver ligado |
+| Categoria | Obrigatória no cabeçalho, salvo se o rateio estiver ligado |
+| Subcategoria | Opcional no cabeçalho. Some daqui se o rateio estiver ligado |
+| Valor | Obrigatório (é o total da conta, o que sai no extrato) |
 | Data da compra | Obrigatória em compra de cartão; opcional no fluxo normal |
 | Data de vencimento | Obrigatória no fluxo normal. No cartão, o sistema calcula pelo ciclo |
 | Data prevista de pagamento/recebimento | Opcional (não aparece em cartão) |
 | Data da baixa | Na edição, se já houver baixas |
 | Observação | Texto livre |
+| Ratear este lançamento | Divide o valor entre categorias e centros de custo |
 | Parcelar este lançamento | Só na criação |
 | Documentos | Anexos na criação (faturas, boletos, comprovantes) |
 
@@ -339,8 +348,43 @@ Se você escolher um **cartão**:
 - a conta bancária some do formulário
 - o vencimento segue o ciclo da fatura
 - a data da compra define em qual fatura a compra entra
+- o rateio continua disponível: a compra fica classificada em fatias; a fatura segue sendo um único título para pagar e conciliar
 
-### 7.5 Baixa (pagamento ou recebimento)
+### 7.5 Rateio
+
+Use o rateio quando **uma única compra** precisa aparecer em mais de uma categoria e/ou centro de custo.
+
+**Exemplo:** você comprou R$ 330 em produtos. Parte foi para a categoria X no centro de custo A (R$ 150), parte para Y no centro B (R$ 100) e o restante para Z no centro C (R$ 80). No banco sai **um** débito de R$ 330. Nos relatórios, cada fatia aparece no seu lugar.
+
+#### Como lançar
+
+1. Preencha descrição, conta bancária (ou cartão), valor total e vencimento como de costume.
+2. Ative **Ratear este lançamento**.
+3. Categoria, subcategoria e centro de custo saem do cabeçalho e passam para as **linhas**.
+4. Em cada linha informe categoria (obrigatória), subcategoria (opcional), centro de custo (opcional) e valor.
+5. Use **Adicionar linha** se precisar de mais fatias (mínimo duas).
+6. Confira o texto *Rateado … de …*: a soma das linhas precisa ser **igual ao valor do lançamento**.
+
+A empresa do cabeçalho vale para a conta inteira.
+
+#### O que o rateio altera (e o que não altera)
+
+| Onde | O que acontece |
+|------|----------------|
+| Lista de contas | Continua **uma** linha, com badge **Rateio** |
+| Baixa e saldo bancário | Um pagamento do valor total |
+| Conciliação OFX | Casa com **uma** transação do extrato |
+| Relatórios por categoria e centro de custo | Mostram as fatias separadas |
+| Fluxo de caixa realizado | Continua **uma** saída do valor total (as categorias aparecem juntas na descrição) |
+| Dashboard filtrado por centro de custo | Conta só a fatia daquele centro |
+
+Não crie três contas a pagar para o mesmo boleto só para classificar: isso complica a conciliação. Rateio é classificação; várias contas só fazem sentido quando realmente existem vários títulos (vários boletos no mesmo débito — aí use a conciliação múltipla).
+
+Baixa parcial também respeita a proporção: se você pagar metade, cada fatia entra pela metade nos relatórios realizados; o restante fica em aberto na mesma proporção.
+
+Na **edição**, você pode ligar, desligar ou ajustar o rateio. Clonar um lançamento rateado copia as fatias.
+
+### 7.6 Baixa (pagamento ou recebimento)
 
 Clique em **Baixar**. No modal **Registrar baixa**:
 
@@ -357,7 +401,7 @@ A baixa entra no **fluxo de caixa realizado** e altera o saldo da conta bancári
 
 **Reabrir conta** (na tela de edição) remove todas as baixas, limpa a data da baixa, volta o status para aberto e, se estiver conciliado, desfaz a conciliação. Essa operação não se desfaz sozinha.
 
-### 7.6 Parcelamento
+### 7.7 Parcelamento
 
 Na criação, ative **Parcelar este lançamento**.
 
@@ -374,7 +418,9 @@ Na criação, ative **Parcelar este lançamento**.
 - cada parcela entra em uma **fatura mensal** seguinte
 - a **data da compra** permanece a da compra original em todas as parcelas
 
-### 7.7 Importar planilha
+Rateio e parcelamento podem ser usados juntos. Cada parcela recebe as mesmas proporções (a última parcela absorve o centavo de arredondamento). Cada parcela continua sendo um lançamento independente para baixa e conciliação.
+
+### 7.8 Importar planilha
 
 Use **Importar planilha** para trazer despesas de um XLSX. É obrigatório escolher a **conta bancária** e o **centro de custo** de destino.
 
@@ -411,6 +457,8 @@ Fluxo resumido:
 No cartão escolhido você vê as **faturas** e as ações **Nova compra** e **Editar cartão**.
 
 Texto da tela: *O fechamento gera uma única conta a pagar para conciliação. As compras permanecem com centro de custo e categoria e são liquidadas quando a fatura for paga.*
+
+Se a compra no cartão for **rateada**, as fatias (categoria e centro de custo) ficam na compra. A fatura continua um único valor a pagar e a conciliar no extrato.
 
 ### 8.2 Como a compra entra na fatura
 
@@ -536,6 +584,8 @@ Indicadores: **Saldo inicial**, **Entradas**, **Saídas**, **Saldo final** do pe
 
 A lista mostra data, lançamento (com conta e categoria) e valor. Entradas aparecem positivas; saídas, negativas. Transferências têm badge próprio.
 
+Lançamentos **rateados** aparecem como **uma** linha, com o valor total. As categorias e centros de custo das fatias vêm juntos na descrição (separados por `/`). Se você filtrar por uma categoria, o valor mostrado é só a fatia daquela categoria.
+
 ### 11.2 Fluxo projetado
 
 **Menu:** Financeiro → Fluxo projetado
@@ -585,6 +635,8 @@ Status da transação: **Pendente**, **Conciliada**, **Ignorada**.
 
 Dica: pague a **fatura do cartão** como um único lançamento e concilie esse valor com o débito correspondente no extrato.
 
+A mesma lógica vale para o **rateio**: no extrato existe um débito só. Concilie a conta rateada (valor total) com essa linha. Não espere três lançamentos de 150, 100 e 80 para um débito de 330.
+
 ---
 
 ## 13. Relatórios
@@ -597,16 +649,18 @@ Todos os relatórios podem ser vistos na tela. Com permissão de exportação, t
 
 | Aba | O que mostra |
 |-----|----------------|
-| **Diário** | Pagamentos e recebimentos de um dia, com saldo do dia, agrupados por conta |
+| **Diário** | Pagamentos e recebimentos de um dia, com saldo do dia, agrupados por centro de custo |
 | **Semanal** | Totais pagos e recebidos no período, saldo líquido |
 | **Provisão** | Contas futuras ainda em aberto (matriz de compromissos) |
-| **Por categoria** | Despesas liquidadas por categoria e conta |
+| **Por categoria** | Despesas liquidadas por categoria e centro de custo |
 | **Resumo mensal** | Consolidado do mês |
 | **Por conta bancária** | Saldo inicial, entradas, saídas e saldo de cada conta |
 | **Demonstrativo** | Realizado versus projetado, com horizontes de 30, 60 ou 90 dias |
 | **Contas a pagar** | Relatório específico de payables, inclusive atrasos |
 
 No demonstrativo você vê **resultado realizado**, **resultado projetado** e **saldo final esperado**.
+
+Nos relatórios **gerenciais** (diário, semanal, provisão, por categoria, contas a pagar), um lançamento rateado **aparece separado**: cada fatia no seu centro de custo e na sua categoria. O total continua o da conta. Já o relatório **por conta bancária** e o fluxo realizado tratam o movimento de caixa: uma saída só, na conta em que o dinheiro saiu.
 
 ---
 
@@ -684,7 +738,7 @@ A maioria dos usuários do financeiro não precisa desta tela.
 2. Cadastre **categorias** (e subcategorias, se precisar).
 3. Cadastre **centros de custo** e **empresas**, se a operação usar essa classificação.
 4. Cadastre os **cartões**, com dia de fechamento, vencimento e conta de pagamento.
-5. Lance as **contas a pagar e a receber** em aberto (ou importe a planilha).
+5. Lance as **contas a pagar e a receber** em aberto (ou importe a planilha). Se uma nota misturar categorias ou centros de custo, use o **rateio**.
 6. Crie **recorrências** para o que se repete todo mês.
 7. Conforme os pagamentos acontecem, registre as **baixas**.
 8. No fechamento do cartão, **feche a fatura** e baixe a conta da fatura.
@@ -712,6 +766,12 @@ Realizado: o que já foi pago/recebido (data da baixa). Projetado: o que ainda v
 
 **Posso parcelar e também usar cartão?**  
 Sim. No cartão, cada parcela cai em uma fatura mensal, com a mesma data de compra.
+
+**Comprei vários tipos de produto no mesmo boleto. Crio várias contas?**  
+Não. Lance **uma** conta com o valor do boleto e ative **Ratear este lançamento**. Informe categoria, centro de custo e valor de cada fatia. A conciliação usa a conta única; os relatórios separam as fatias.
+
+**O rateio muda o valor que sai no banco?**  
+Não. O banco vê o total. O rateio só classifica o gasto (categoria e centro de custo) para relatórios e dashboard.
 
 **A importação de planilha cria receitas?**  
 Não. As linhas consideradas entram como **contas a pagar**.
@@ -746,6 +806,7 @@ O perfil de acesso esconde o que você não pode usar. Peça ao administrador a 
 | **OFX** | Formato de extrato bancário para importação |
 | **Parcial** | Parte do valor já baixada |
 | **Parcela** | Fatia de um lançamento dividido no tempo |
+| **Rateio** | Divisão de um único lançamento entre categorias e centros de custo, sem criar várias contas |
 | **Recorrência** | Modelo que gera lançamentos periódicos |
 | **Tenant / organização** | Empresa isolada no sistema (os dados não se misturam) |
 | **Transferência** | Movimento entre duas contas bancárias |

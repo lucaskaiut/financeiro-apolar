@@ -58,6 +58,8 @@ export interface DashboardAccount {
 export interface DashboardSummary {
   cost_centers: Array<{ id: string; name: string }>
   selected_cost_center_id: string | null
+  bank_accounts: Array<{ id: string; name: string }>
+  selected_bank_account_id: string | null
   kpis: DashboardKpis
   cash_flow_series: CashFlowMonth[]
   projected_series: ProjectedDay[]
@@ -71,9 +73,13 @@ export interface DashboardSummary {
 }
 
 export const dashboardService = {
-  async summary(cost_center_id?: string): Promise<DashboardSummary> {
+  async summary(cost_center_id?: string, bank_account_id?: string): Promise<DashboardSummary> {
+    const params: Record<string, string> = {}
+    if (cost_center_id) params.cost_center_id = cost_center_id
+    if (bank_account_id) params.bank_account_id = bank_account_id
+
     const response = await http.get<ApiResponse<DashboardSummary>>('/dashboard', {
-      params: cost_center_id ? { cost_center_id } : undefined,
+      params: Object.keys(params).length > 0 ? params : undefined,
     })
 
     return response.data.data

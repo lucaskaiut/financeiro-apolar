@@ -14,7 +14,8 @@ class DashboardController extends ApiController
     public function summary(Request $request): JsonResponse
     {
         $costCenterId = $request->string('cost_center_id')->toString() ?: null;
+        $bankAccountId = $request->string('bank_account_id')->toString() ?: null;
 
-        return $this->success($this->service->summary($costCenterId));
+        return $this->success($this->service->summary($costCenterId, $bankAccountId));
     }
 }
