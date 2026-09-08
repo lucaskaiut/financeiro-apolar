@@ -1,5 +1,5 @@
 import type { Account } from '@/shared/types/models'
-import type { AccountFormValues } from '../schemas/account.schema'
+import { type AccountFormValues } from '../schemas/account.schema'
 
 export function accountToCloneFormValues(account: Account): Partial<AccountFormValues> {
   return {
@@ -21,5 +21,15 @@ export function accountToCloneFormValues(account: Account): Partial<AccountFormV
     installments: false,
     installment_quantity: '2',
     installment_interval: 'monthly',
+    split: account.allocation_mode === 'split',
+    allocations:
+      account.allocation_mode === 'split' && account.allocations && account.allocations.length > 0
+        ? account.allocations.map((line) => ({
+            category_id: line.category_id ?? '',
+            subcategory_id: line.subcategory_id ?? '',
+            cost_center_id: line.cost_center_id ?? '',
+            value: String(line.value),
+          }))
+        : [],
   }
 }

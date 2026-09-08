@@ -24,6 +24,7 @@ import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenter
 import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { categoriesService } from '@/modules/categories/services/categories.service'
 import { accountSchema, type AccountFormValues } from '../schemas/account.schema'
+import { AllocationFields } from './AllocationFields'
 import type { AccountPayload } from '../services/accounts.service'
 import { PendingDocuments } from '../components/PendingDocuments'
 
@@ -67,6 +68,8 @@ export function AccountForm({
       installments: false,
       installment_quantity: '2',
       installment_interval: 'monthly',
+      split: false,
+      allocations: [],
       ...defaultValues,
       ...(isCardPurchase && purchaseDate ? { purchase_date: purchaseDate } : {}),
     },
@@ -77,6 +80,7 @@ export function AccountForm({
 
   const type = form.watch('type')
   const installments = form.watch('installments')
+  const split = form.watch('split')
   const creditCardId = form.watch('credit_card_id')
   const usingCreditCard = mode === 'create' ? Boolean(creditCardId) : isCardPurchase
   const categoryType = type === 'receivable' ? 'income' : 'expense'
@@ -142,9 +146,9 @@ export function AccountForm({
       description: values.description,
       counterparty: values.counterparty || null,
       company_id: values.company_id || null,
-      cost_center_id: values.cost_center_id || null,
-      category_id: values.category_id,
-      subcategory_id: values.subcategory_id || null,
+      cost_center_id: values.split ? null : values.cost_center_id || null,
+      category_id: values.split ? null : values.category_id,
+      subcategory_id: values.split ? null : values.subcategory_id || null,
       value: Number(values.value),
       purchase_date: values.purchase_date || null,
       expected_date: values.expected_date || null,
@@ -156,6 +160,16 @@ export function AccountForm({
             ? { quantity: Number(values.installment_quantity) }
             : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
           : null,
+      allocations: values.split
+        ? values.allocations
+            .filter((line) => line.category_id && Number(line.value) > 0)
+            .map((line) => ({
+              category_id: line.category_id,
+              subcategory_id: line.subcategory_id || null,
+              cost_center_id: line.cost_center_id || null,
+              value: Number(line.value),
+            }))
+        : null,
     }
 
     if (hasCreditCard) {
@@ -230,41 +244,45 @@ export function AccountForm({
                 options={companies.data ?? []}
                 placeholder="Opcional"
               />
-              <SelectField
-                name="cost_center_id"
-                label="Centro de custo"
-                options={costCenters.data ?? []}
-                placeholder="Opcional"
-              />
-              <SearchSelectField
-                name="category_id"
-                label="Categoria"
-                loadOptions={loadCategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar categoria..."
-                required
-                onSelectOption={(option) => {
-                  const subcategoryId = form.getValues('subcategory_id')
-                  if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
-                    form.setValue('subcategory_id', '')
-                    setSelectedSubcategory(null)
-                  }
-                }}
-              />
-              <SearchSelectField
-                name="subcategory_id"
-                label="Subcategoria"
-                loadOptions={loadSubcategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar subcategoria..."
-                onSelectOption={(option) => {
-                  setSelectedSubcategory(option)
-                  const categoryId = form.getValues('category_id')
-                  if (option.parent_id && option.parent_id !== categoryId) {
-                    form.setValue('category_id', option.parent_id)
-                  }
-                }}
-              />
+              {!split && (
+                <>
+                  <SelectField
+                    name="cost_center_id"
+                    label="Centro de custo"
+                    options={costCenters.data ?? []}
+                    placeholder="Opcional"
+                  />
+                  <SearchSelectField
+                    name="category_id"
+                    label="Categoria"
+                    loadOptions={loadCategories}
+                    resolveLabel={resolveLabel}
+                    placeholder="Buscar categoria..."
+                    required
+                    onSelectOption={(option) => {
+                      const subcategoryId = form.getValues('subcategory_id')
+                      if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
+                        form.setValue('subcategory_id', '')
+                        setSelectedSubcategory(null)
+                      }
+                    }}
+                  />
+                  <SearchSelectField
+                    name="subcategory_id"
+                    label="Subcategoria"
+                    loadOptions={loadSubcategories}
+                    resolveLabel={resolveLabel}
+                    placeholder="Buscar subcategoria..."
+                    onSelectOption={(option) => {
+                      setSelectedSubcategory(option)
+                      const categoryId = form.getValues('category_id')
+                      if (option.parent_id && option.parent_id !== categoryId) {
+                        form.setValue('category_id', option.parent_id)
+                      }
+                    }}
+                  />
+                </>
+              )}
               <TextField
                 name="value"
                 label="Valor"
@@ -312,6 +330,22 @@ export function AccountForm({
 
           <Section title="Observação">
             <TextareaField name="observation" rows={3} />
+          </Section>
+
+          <Section
+            title="Rateio"
+            description="Distribua o valor entre categorias e centros de custo. A conciliação continua em um único lançamento."
+          >
+            <SwitchField
+              name="split"
+              label="Ratear este lançamento"
+              hint="Os relatórios separam as fatias; o extrato concilia o valor total."
+            />
+            {split && (
+              <div className="mt-4">
+                <AllocationFields categoryType={categoryType} />
+              </div>
+            )}
           </Section>
 
           {mode === 'create' && (

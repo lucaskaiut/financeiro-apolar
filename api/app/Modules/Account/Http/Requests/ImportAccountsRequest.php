@@ -25,6 +25,11 @@ class ImportAccountsRequest extends FormRequest
                 'string',
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
+            'cost_center_id' => [
+                'required',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
         ];
     }
 }

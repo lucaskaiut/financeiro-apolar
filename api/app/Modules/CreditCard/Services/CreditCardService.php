@@ -6,6 +6,7 @@ use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\Account\Services\AllocationService;
 use App\Modules\CreditCard\Enums\CreditCardInvoiceStatus;
 use App\Modules\CreditCard\Models\CreditCard;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
@@ -18,6 +19,9 @@ use InvalidArgumentException;
 
 class CreditCardService
 {
+    public function __construct(
+        private readonly AllocationService $allocations,
+    ) {}
     public function paginate(int $perPage = 15, ?string $search = null): LengthAwarePaginator
     {
         return CreditCard::query()
@@ -59,6 +63,7 @@ class CreditCardService
     {
         return DB::transaction(function () use ($creditCard, $data): array {
             $installments = $data['installments'] ?? null;
+            $allocations = $data['allocations'] ?? null;
             unset($data['installments'], $data['allocations']);
 
             $quantity = max(1, (int) ($installments['quantity'] ?? 1));
@@ -82,7 +87,7 @@ class CreditCardService
                     ...$base,
                     'purchase_date' => $purchaseDate->toDateString(),
                     'due_date' => $dueDate->toDateString(),
-                ])];
+                ], $allocations)];
             }
 
             return $this->createPurchaseInstallments(
@@ -90,22 +95,32 @@ class CreditCardService
                 $base,
                 $purchaseDate,
                 $quantity,
+                $allocations,
             );
         });
     }
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>|null  $allocations
      */
-    private function persistPurchase(array $data): FinancialAccount
+    private function persistPurchase(array $data, ?array $allocations = null): FinancialAccount
     {
         $account = FinancialAccount::query()->create($data);
+        $this->allocations->sync($account, $allocations);
 
-        return $account->load(['company', 'costCenter']);
+        return $account->load([
+            'company',
+            'costCenter',
+            'allocations.costCenter:id,uuid,name',
+            'allocations.category:id,uuid,name,color,type',
+            'allocations.subcategory:id,uuid,name',
+        ]);
     }
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>|null  $allocations
      * @return list<FinancialAccount>
      */
     private function createPurchaseInstallments(
@@ -113,6 +128,7 @@ class CreditCardService
         array $data,
         Carbon $firstPurchaseDate,
         int $quantity,
+        ?array $allocations = null,
     ): array {
         if ($quantity < 1 || $quantity > 120) {
             throw new InvalidArgumentException('A quantidade de parcelas deve estar entre 1 e 120.');
@@ -124,6 +140,7 @@ class CreditCardService
         $description = (string) $data['description'];
         $accounts = [];
         $accumulated = 0.0;
+        $installmentValues = [];
 
         [, $firstReferenceMonth] = $this->resolvePurchaseDates($creditCard, $firstPurchaseDate);
         $purchaseDate = $firstPurchaseDate->toDateString();
@@ -134,7 +151,15 @@ class CreditCardService
                 : $installmentValue;
 
             $accumulated = round($accumulated + $value, 2);
+            $installmentValues[] = $value;
+        }
 
+        $distributed = is_array($allocations) && $allocations !== []
+            ? $this->allocations->distributeAcross($allocations, $installmentValues)
+            : array_fill(0, $quantity, $allocations);
+
+        for ($i = 1; $i <= $quantity; $i++) {
+            $value = $installmentValues[$i - 1];
             $referenceMonth = Carbon::createFromFormat('Y-m', $firstReferenceMonth)
                 ->addMonthsNoOverflow($i - 1)
                 ->format('Y-m');
@@ -149,7 +174,7 @@ class CreditCardService
                 'installment_group_id' => $group,
                 'installment_number' => $i,
                 'installment_total' => $quantity,
-            ]);
+            ], $distributed[$i - 1] ?? null);
         }
 
         return $accounts;

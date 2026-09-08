@@ -107,6 +107,20 @@ export interface AccountDocument {
   created_at: string | null
 }
 
+export interface AccountAllocation {
+  id: string
+  cost_center_id: string | null
+  cost_center: string | null
+  company_id: string | null
+  company: string | null
+  category_id: string | null
+  category: { name: string; color: string | null; type: string } | null
+  subcategory_id: string | null
+  subcategory?: { name: string } | null
+  value: number
+  percentage: number | null
+}
+
 export interface Account {
   id: string
   type: 'payable' | 'receivable'
@@ -124,6 +138,7 @@ export interface Account {
   credit_card_invoice_id?: string | null
   is_card_purchase?: boolean
   is_card_invoice_payable?: boolean
+  allocation_mode?: 'single' | 'split'
   category_id: string | null
   category: { name: string; color: string | null; type: string } | null
   subcategory_id: string | null
@@ -144,6 +159,7 @@ export interface Account {
   recurrence_id: string | null
   transfer_id: number | null
   is_reconciled: boolean
+  allocations?: AccountAllocation[]
   settlements?: Settlement[]
   created_at: string | null
   updated_at: string | null

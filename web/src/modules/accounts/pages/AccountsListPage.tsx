@@ -25,6 +25,7 @@ import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { useDebounce } from '@/shared/hooks/useDebounce'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { cn } from '@/shared/utils/cn'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
@@ -76,6 +77,7 @@ export default function AccountsListPage() {
   const overdue = searchParams.get('overdue') === '1'
   const bankAccountId = searchParams.get('bank_account_id') ?? ''
   const creditCardId = searchParams.get('credit_card_id') ?? ''
+  const costCenterId = searchParams.get('cost_center_id') ?? ''
 
   useEffect(() => {
     setDueFrom(searchParams.get('due_from') ?? '')
@@ -88,6 +90,7 @@ export default function AccountsListPage() {
   const { can } = usePermissions()
   const bankAccounts = useBankAccountOptions()
   const creditCards = useCreditCardOptions()
+  const costCenters = useCostCenterOptions()
 
   const [toDelete, setToDelete] = useState<Account | null>(null)
   const [toCancel, setToCancel] = useState<Account | null>(null)
@@ -107,6 +110,7 @@ export default function AccountsListPage() {
     overdue: overdue || undefined,
     bank_account_id: bankAccountId || undefined,
     credit_card_id: creditCardId || undefined,
+    cost_center_id: costCenterId || undefined,
     due_from: dueFrom || undefined,
     due_to: dueTo || undefined,
     paid_from: paidFrom || undefined,
@@ -121,6 +125,7 @@ export default function AccountsListPage() {
     overdue?: string
     bank_account_id?: string
     credit_card_id?: string
+    cost_center_id?: string
     due_from?: string
     due_to?: string
     paid_from?: string
@@ -151,6 +156,10 @@ export default function AccountsListPage() {
       }
       if (next.credit_card_id !== undefined) {
         next.credit_card_id ? params.set('credit_card_id', next.credit_card_id) : params.delete('credit_card_id')
+        params.delete('page')
+      }
+      if (next.cost_center_id !== undefined) {
+        next.cost_center_id ? params.set('cost_center_id', next.cost_center_id) : params.delete('cost_center_id')
         params.delete('page')
       }
       if (next.due_from !== undefined) {
@@ -185,8 +194,17 @@ export default function AccountsListPage() {
       key: 'description',
       header: 'Lançamento',
       render: (a) => {
+        const categoryLabel =
+          a.allocation_mode === 'split' && a.allocations?.length
+            ? a.allocations
+                .map((line) => line.category?.name)
+                .filter(Boolean)
+                .filter((name, index, names) => names.indexOf(name) === index)
+                .join(' / ')
+            : a.category?.name
+
         const meta = [
-          a.category?.name,
+          categoryLabel,
           a.credit_card ? `Cartão: ${a.credit_card}` : null,
           !a.credit_card ? a.bank_account : null,
           a.counterparty,
@@ -201,6 +219,7 @@ export default function AccountsListPage() {
                   {a.installment_number}/{a.installment_total}
                 </Badge>
               )}
+              {a.allocation_mode === 'split' && <Badge variant="primary">Rateio</Badge>}
             </div>
             <p className="truncate text-[13px] text-muted">{meta.length > 0 ? meta.join(' · ') : '—'}</p>
           </div>
@@ -367,7 +386,7 @@ export default function AccountsListPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block min-w-0">
               <span className="mb-1.5 block text-[13px] font-medium text-foreground">Conta bancária</span>
               <Select
@@ -387,6 +406,17 @@ export default function AccountsListPage() {
                 placeholder="Todos"
                 options={creditCards.data ?? []}
                 onChange={(e) => updateParams({ credit_card_id: e.target.value })}
+              />
+            </label>
+
+            <label className="block min-w-0">
+              <span className="mb-1.5 block text-[13px] font-medium text-foreground">Centro de custo</span>
+              <Select
+                aria-label="Filtrar por centro de custo"
+                value={costCenterId}
+                placeholder="Todos"
+                options={costCenters.data ?? []}
+                onChange={(e) => updateParams({ cost_center_id: e.target.value })}
               />
             </label>
           </div>

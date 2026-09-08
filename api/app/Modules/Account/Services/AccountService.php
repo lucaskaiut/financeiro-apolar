@@ -3,6 +3,7 @@
 namespace App\Modules\Account\Services;
 
 use App\Modules\Account\Enums\AccountStatus;
+use App\Modules\Account\Enums\AllocationMode;
 use App\Modules\Account\Exceptions\AccountUpdateException;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
@@ -23,10 +24,11 @@ class AccountService
 {
     public function __construct(
         private readonly CreditCardService $creditCards,
+        private readonly AllocationService $allocations,
     ) {}
 
     /**
-     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
+     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, cost_center_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
      */
     public function paginate(int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
@@ -38,6 +40,9 @@ class AccountService
                 'creditCard:id,uuid,name',
                 'category:id,uuid,name,color,type',
                 'subcategory:id,uuid,name',
+                'allocations.costCenter:id,uuid,name',
+                'allocations.category:id,uuid,name,color,type',
+                'allocations.subcategory:id,uuid,name',
             ])
             ->withSum('settlements', 'value');
 
@@ -68,7 +73,9 @@ class AccountService
                     ->orWhereHas('allocations', fn ($a) => $a->where('company_id', $companyId));
             });
         });
-        $query->when(filled($filters['category_id'] ?? null), fn ($q) => $q->where('category_id', $filters['category_id']));
+        $query->when(filled($filters['category_id'] ?? null), function ($q) use ($filters): void {
+            $q->forCategory($filters['category_id']);
+        });
         $query->when(filled($filters['installment_group_id'] ?? null), fn ($q) => $q->where('installment_group_id', $filters['installment_group_id']));
         $query->when(filled($filters['due_from'] ?? null), fn ($q) => $q->whereDate('due_date', '>=', $filters['due_from']));
         $query->when(filled($filters['due_to'] ?? null), fn ($q) => $q->whereDate('due_date', '<=', $filters['due_to']));
@@ -110,6 +117,10 @@ class AccountService
                 'category:id,uuid,name,color,type',
                 'subcategory:id,uuid,name',
                 'settlements' => fn ($q) => $q->orderBy('settled_at'),
+                'allocations.costCenter:id,uuid,name',
+                'allocations.category:id,uuid,name,color,type',
+                'allocations.subcategory:id,uuid,name',
+                'allocations.company:id,uuid,name',
             ])
             ->withSum('settlements', 'value')
             ->where('uuid', $uuid)
@@ -123,25 +134,27 @@ class AccountService
     public function create(array $data): array
     {
         $installments = $data['installments'] ?? null;
+        $allocations = $data['allocations'] ?? null;
         unset($data['installments'], $data['allocations']);
 
         if (! empty($data['credit_card_id'])) {
-            return $this->createCardPurchase($data, $installments);
+            return $this->createCardPurchase($data, $installments, $allocations);
         }
 
         if ($installments === null || (int) ($installments['quantity'] ?? 1) <= 1) {
-            return [$this->persistAccount($data)];
+            return [$this->persistAccount($data, $allocations)];
         }
 
-        return $this->createInstallments($data, (int) $installments['quantity'], $installments['interval'] ?? 'monthly');
+        return $this->createInstallments($data, (int) $installments['quantity'], $installments['interval'] ?? 'monthly', $allocations);
     }
 
     /**
      * @param  array<string, mixed>  $data
      * @param  array{quantity?: int, interval?: string}|null  $installments
+     * @param  list<array<string, mixed>>|null  $allocations
      * @return list<FinancialAccount>
      */
-    private function createCardPurchase(array $data, ?array $installments): array
+    private function createCardPurchase(array $data, ?array $installments, ?array $allocations): array
     {
         $card = CreditCard::query()->where('uuid', $data['credit_card_id'])->firstOrFail();
 
@@ -158,28 +171,40 @@ class AccountService
             'purchase_date' => $data['purchase_date'],
             'observation' => $data['observation'] ?? null,
             'installments' => $quantity > 1 ? ['quantity' => $quantity] : null,
+            'allocations' => $allocations,
         ]);
     }
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>|null  $allocations
      */
-    private function persistAccount(array $data): FinancialAccount
+    private function persistAccount(array $data, ?array $allocations = null): FinancialAccount
     {
         unset($data['allocations']);
 
-        return DB::transaction(function () use ($data): FinancialAccount {
+        return DB::transaction(function () use ($data, $allocations): FinancialAccount {
+            $data['allocation_mode'] ??= AllocationMode::Single;
             $account = FinancialAccount::query()->create($data);
+            $this->allocations->sync($account, $allocations);
 
-            return $account->refresh()->load(['bankAccount', 'company', 'costCenter']);
+            return $account->refresh()->load([
+                'bankAccount',
+                'company',
+                'costCenter',
+                'allocations.costCenter:id,uuid,name',
+                'allocations.category:id,uuid,name,color,type',
+                'allocations.subcategory:id,uuid,name',
+            ]);
         });
     }
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>|null  $allocations
      * @return list<FinancialAccount>
      */
-    private function createInstallments(array $data, int $quantity, string $interval): array
+    private function createInstallments(array $data, int $quantity, string $interval, ?array $allocations = null): array
     {
         if ($quantity < 1 || $quantity > 120) {
             throw new InvalidArgumentException('A quantidade de parcelas deve estar entre 1 e 120.');
@@ -192,6 +217,7 @@ class AccountService
         $accounts = [];
 
         $accumulated = 0.0;
+        $installmentValues = [];
 
         for ($i = 1; $i <= $quantity; $i++) {
             $value = $i === $quantity
@@ -199,6 +225,15 @@ class AccountService
                 : $installmentValue;
 
             $accumulated = round($accumulated + $value, 2);
+            $installmentValues[] = $value;
+        }
+
+        $distributed = is_array($allocations) && $allocations !== []
+            ? $this->allocations->distributeAcross($allocations, $installmentValues)
+            : array_fill(0, $quantity, $allocations);
+
+        for ($i = 1; $i <= $quantity; $i++) {
+            $value = $installmentValues[$i - 1];
 
             $dueDate = $i === 1
                 ? $firstDueDate->copy()
@@ -212,7 +247,7 @@ class AccountService
                 'installment_group_id' => $group,
                 'installment_number' => $i,
                 'installment_total' => $quantity,
-            ]);
+            ], $distributed[$i - 1] ?? null);
         }
 
         return $accounts;
@@ -234,6 +269,8 @@ class AccountService
     {
         $hasSettlements = $account->settlements()->exists();
 
+        $allocationsProvided = array_key_exists('allocations', $data);
+        $allocations = $allocationsProvided ? $data['allocations'] : null;
         unset($data['allocations']);
 
         if ($account->is_card_purchase) {
@@ -252,6 +289,10 @@ class AccountService
 
         $account->fill($data);
         $account->save();
+
+        if ($allocationsProvided) {
+            $this->allocations->sync($account->refresh(), is_array($allocations) ? $allocations : null);
+        }
 
         if ($hasSettlements && $valueChanged) {
             $this->syncSettlementValues($account);

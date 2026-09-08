@@ -8,6 +8,7 @@ use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreAccountRequest extends FormRequest
 {
@@ -50,7 +51,8 @@ class StoreAccountRequest extends FormRequest
                 Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'category_id' => [
-                'required',
+                Rule::requiredIf(fn () => ! AccountAllocationValidation::hasAllocations($this->input('allocations'))),
+                'nullable',
                 'string',
                 Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
@@ -69,7 +71,18 @@ class StoreAccountRequest extends FormRequest
             'installments' => ['nullable', 'array:quantity,interval'],
             'installments.quantity' => ['required_with:installments', 'integer', 'min:1', 'max:120'],
             'installments.interval' => ['nullable', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
+            ...AccountAllocationValidation::rules($tenantId),
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            AccountAllocationValidation::after(
+                $validator,
+                fn () => (float) $this->input('value'),
+            );
+        });
     }
 
     protected function prepareForValidation(): void
@@ -96,6 +109,7 @@ class StoreAccountRequest extends FormRequest
         $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date']);
 
         $this->fillCategoryFromSubcategory();
+        $this->merge(AccountAllocationValidation::fillCategoriesFromSubcategories($this->all()));
     }
 
     /**

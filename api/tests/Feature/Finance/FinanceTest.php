@@ -49,10 +49,10 @@ class FinanceTest extends TestCase
         ])->assertCreated()->json('data.id');
     }
 
-    private function createCategory(string $type = 'expense'): string
+    private function createCategory(string $type = 'expense', string $name = 'Fornecedores'): string
     {
         $response = $this->postJson('/api/categories', [
-            'name' => 'Fornecedores',
+            'name' => $name,
             'type' => $type,
             'color' => '#6366f1',
             'status' => 'active',
@@ -251,6 +251,90 @@ class FinanceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $accountB);
+    }
+
+    public function test_accounts_can_be_filtered_by_cost_center(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+        $obraB = $this->createCostCenter('Obra B');
+
+        $accountA = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Despesa obra A',
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $obraA,
+            'category_id' => $categoryId,
+            'value' => 100,
+            'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
+        ])->json('data.0.id');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Despesa obra B',
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $obraB,
+            'category_id' => $categoryId,
+            'value' => 200,
+            'due_date' => '2026-03-01',
+            'purchase_date' => '2026-03-01',
+        ])->assertCreated();
+
+        $this->getJson("/api/accounts?cost_center_id={$obraA}")
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $accountA);
+    }
+
+    public function test_dashboard_can_be_filtered_by_cost_center(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+        $obraB = $this->createCostCenter('Obra B');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Vencida obra A',
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $obraA,
+            'category_id' => $categoryId,
+            'value' => 100,
+            'due_date' => now()->subDays(3)->toDateString(),
+            'purchase_date' => now()->subDays(3)->toDateString(),
+        ])->assertCreated();
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Vencida obra B',
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $obraB,
+            'category_id' => $categoryId,
+            'value' => 250,
+            'due_date' => now()->subDays(3)->toDateString(),
+            'purchase_date' => now()->subDays(3)->toDateString(),
+        ])->assertCreated();
+
+        $this->getJson('/api/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.kpis.payable_open', 350)
+            ->assertJsonPath('data.kpis.overdue_count', 2)
+            ->assertJsonCount(2, 'data.cost_centers');
+
+        $this->getJson("/api/dashboard?cost_center_id={$obraA}")
+            ->assertOk()
+            ->assertJsonPath('data.selected_cost_center_id', $obraA)
+            ->assertJsonPath('data.kpis.payable_open', 100)
+            ->assertJsonPath('data.kpis.overdue_count', 1)
+            ->assertJsonPath('data.overdue.0.description', 'Vencida obra A');
     }
 
     public function test_accounts_overdue_filter_returns_unpaid_past_due(): void
@@ -1406,5 +1490,134 @@ OFX;
             ->assertOk()
             ->assertJsonPath('data.description', 'Compra atualizada')
             ->assertJsonPath('data.is_card_purchase', true);
+    }
+
+    public function test_account_split_allocations_are_persisted_and_used_in_reports(): void
+    {
+        Carbon::setTestNow('2026-09-15 10:00:00');
+
+        try {
+            $tenant = $this->createTenantWithRoles();
+            Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryX = $this->createCategory('expense', 'Categoria X');
+        $categoryY = $this->createCategory('expense', 'Categoria Y');
+        $categoryZ = $this->createCategory('expense', 'Categoria Z');
+        $obraA = $this->createCostCenter('Obra A');
+        $obraB = $this->createCostCenter('Obra B');
+        $obraC = $this->createCostCenter('Obra C');
+
+        $response = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Compra rateada',
+            'bank_account_id' => $bankAccountId,
+            'value' => 330,
+            'due_date' => '2026-09-10',
+            'purchase_date' => '2026-09-08',
+            'allocations' => [
+                ['category_id' => $categoryX, 'cost_center_id' => $obraA, 'value' => 150],
+                ['category_id' => $categoryY, 'cost_center_id' => $obraB, 'value' => 100],
+                ['category_id' => $categoryZ, 'cost_center_id' => $obraC, 'value' => 80],
+            ],
+        ])->assertCreated();
+
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame('split', $response->json('data.0.allocation_mode'));
+        $this->assertNull($response->json('data.0.category_id'));
+        $this->assertNull($response->json('data.0.cost_center_id'));
+        $this->assertCount(3, $response->json('data.0.allocations'));
+        $this->assertEqualsWithDelta(330, collect($response->json('data.0.allocations'))->sum('value'), 0.01);
+
+        $accountId = $response->json('data.0.id');
+
+        $this->getJson("/api/accounts?cost_center_id={$obraB}")
+            ->assertOk()
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.id', $accountId);
+
+        $this->postJson("/api/accounts/{$accountId}/settle", [
+            'value' => 330,
+            'settled_at' => '2026-09-10',
+        ])->assertOk();
+
+        $daily = $this->getJson('/api/reports/daily?date=2026-09-10')->assertOk()->json('data');
+        $this->assertEqualsWithDelta(330, $daily['total_paid'], 0.01);
+        $this->assertCount(3, $daily['payments']);
+        $this->assertEqualsCanonicalizing(
+            ['Obra A', 'Obra B', 'Obra C'],
+            collect($daily['groups'])->pluck('bank_account')->all(),
+        );
+
+        $byCategory = $this->getJson('/api/reports/by-category?from=2026-09-01&to=2026-09-30')->assertOk()->json('data');
+        $expense = collect($byCategory['expense'])->keyBy('category');
+        $this->assertEqualsWithDelta(150, $expense['Categoria X']['total'], 0.01);
+        $this->assertEqualsWithDelta(100, $expense['Categoria Y']['total'], 0.01);
+        $this->assertEqualsWithDelta(80, $expense['Categoria Z']['total'], 0.01);
+
+        $cashFlow = $this->getJson('/api/cash-flow/realized?from=2026-09-01&to=2026-09-30')->assertOk()->json('data');
+        $this->assertEqualsWithDelta(330, $cashFlow['total_out'], 0.01);
+        $this->assertCount(1, $cashFlow['entries']);
+        $this->assertEqualsWithDelta(330, $cashFlow['entries'][0]['value'], 0.01);
+
+        $dashboard = $this->getJson("/api/dashboard?cost_center_id={$obraA}")->assertOk()->json('data');
+        $this->assertEqualsWithDelta(150, $dashboard['kpis']['month_expense'], 0.01);
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Rateio inválido',
+            'bank_account_id' => $bankAccountId,
+            'value' => 330,
+            'due_date' => '2026-09-11',
+            'allocations' => [
+                ['category_id' => $categoryX, 'cost_center_id' => $obraA, 'value' => 150],
+                ['category_id' => $categoryY, 'cost_center_id' => $obraB, 'value' => 100],
+            ],
+        ])->assertUnprocessable();
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_split_allocations_are_distributed_across_installments(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryX = $this->createCategory('expense', 'Categoria X');
+        $categoryY = $this->createCategory('expense', 'Categoria Y');
+        $obraA = $this->createCostCenter('Obra A');
+        $obraB = $this->createCostCenter('Obra B');
+
+        $response = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Compra parcelada rateada',
+            'bank_account_id' => $bankAccountId,
+            'value' => 300,
+            'due_date' => '2026-09-10',
+            'purchase_date' => '2026-09-08',
+            'installments' => ['quantity' => 3, 'interval' => 'monthly'],
+            'allocations' => [
+                ['category_id' => $categoryX, 'cost_center_id' => $obraA, 'value' => 180],
+                ['category_id' => $categoryY, 'cost_center_id' => $obraB, 'value' => 120],
+            ],
+        ])->assertCreated();
+
+        $this->assertCount(3, $response->json('data'));
+
+        $accounts = collect($response->json('data'));
+        $this->assertTrue($accounts->every(fn (array $account) => $account['allocation_mode'] === 'split'));
+        $this->assertEqualsWithDelta(300, $accounts->sum('value'), 0.01);
+        $this->assertEqualsWithDelta(
+            180,
+            $accounts->sum(fn (array $account) => collect($account['allocations'])->firstWhere('category_id', $categoryX)['value']),
+            0.01,
+        );
+        $this->assertEqualsWithDelta(
+            120,
+            $accounts->sum(fn (array $account) => collect($account['allocations'])->firstWhere('category_id', $categoryY)['value']),
+            0.01,
+        );
     }
 }

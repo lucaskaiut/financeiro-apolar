@@ -82,6 +82,36 @@ class Settlement extends Model
     /**
      * @param  Builder<Settlement>  $query
      * @return Builder<Settlement>
+     */
+    public function scopeForCostCenter(Builder $query, ?string $costCenterId): Builder
+    {
+        if ($costCenterId === null || $costCenterId === '') {
+            return $query;
+        }
+
+        return $query->whereHas('account', function (Builder $accountQuery) use ($costCenterId): void {
+            $accountQuery->forCostCenter($costCenterId);
+        });
+    }
+
+    /**
+     * @param  Builder<Settlement>  $query
+     * @return Builder<Settlement>
+     */
+    public function scopeForCategory(Builder $query, ?string $categoryId): Builder
+    {
+        if ($categoryId === null || $categoryId === '') {
+            return $query;
+        }
+
+        return $query->whereHas('account', function (Builder $accountQuery) use ($categoryId): void {
+            $accountQuery->forCategory($categoryId);
+        });
+    }
+
+    /**
+     * @param  Builder<Settlement>  $query
+     * @return Builder<Settlement>
      *
      * @deprecated Use countingFinancially()
      */

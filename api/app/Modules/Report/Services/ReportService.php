@@ -6,6 +6,7 @@ use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\Account\Support\ClassificationSlices;
 use App\Modules\CashFlow\Services\CashFlowService;
 use App\Modules\Category\Enums\CategoryType;
 use App\Modules\BankAccount\Models\BankAccount;
@@ -32,7 +33,7 @@ class ReportService
         $settlements = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
-            ->with(['account.costCenter:id,uuid,name', 'account.category:id,uuid,name'])
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
             ->whereDate('settled_at', $date->toDateString())
             ->orderBy('settled_at')
             ->get();
@@ -50,36 +51,38 @@ class ReportService
                 continue;
             }
 
-            $costCenter = $this->defaultCostCenterLabel($account->costCenter?->name);
+            foreach (ClassificationSlices::forAmount($account, (float) $settlement->value) as $slice) {
+                $costCenter = $this->defaultCostCenterLabel($slice['cost_center_name']);
 
-            if (! isset($groupsMap[$costCenter])) {
-                $groupsMap[$costCenter] = [
-                    'bank_account' => $costCenter,
-                    'payments' => [],
-                    'receipts' => [],
-                    'total_paid' => 0.0,
-                    'total_received' => 0.0,
-                    'balance' => 0.0,
+                if (! isset($groupsMap[$costCenter])) {
+                    $groupsMap[$costCenter] = [
+                        'bank_account' => $costCenter,
+                        'payments' => [],
+                        'receipts' => [],
+                        'total_paid' => 0.0,
+                        'total_received' => 0.0,
+                        'balance' => 0.0,
+                    ];
+                }
+
+                $entry = [
+                    'description' => $account->description,
+                    'bank_account' => $slice['cost_center_name'],
+                    'category' => $slice['category_name'],
+                    'value' => $slice['value'],
                 ];
-            }
 
-            $entry = [
-                'description' => $account->description,
-                'bank_account' => $account->costCenter?->name,
-                'category' => $account->category?->name,
-                'value' => (float) $settlement->value,
-            ];
-
-            if ($account->type === AccountType::Receivable) {
-                $totalReceived += (float) $settlement->value;
-                $receipts[] = $entry;
-                $groupsMap[$costCenter]['receipts'][] = $entry;
-                $groupsMap[$costCenter]['total_received'] += (float) $settlement->value;
-            } else {
-                $totalPaid += (float) $settlement->value;
-                $payments[] = $entry;
-                $groupsMap[$costCenter]['payments'][] = $entry;
-                $groupsMap[$costCenter]['total_paid'] += (float) $settlement->value;
+                if ($account->type === AccountType::Receivable) {
+                    $totalReceived += $slice['value'];
+                    $receipts[] = $entry;
+                    $groupsMap[$costCenter]['receipts'][] = $entry;
+                    $groupsMap[$costCenter]['total_received'] += $slice['value'];
+                } else {
+                    $totalPaid += $slice['value'];
+                    $payments[] = $entry;
+                    $groupsMap[$costCenter]['payments'][] = $entry;
+                    $groupsMap[$costCenter]['total_paid'] += $slice['value'];
+                }
             }
         }
 
@@ -109,7 +112,7 @@ class ReportService
         $settlements = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
-            ->with(['account.costCenter:id,uuid,name'])
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
             ->get();
@@ -125,25 +128,27 @@ class ReportService
                 continue;
             }
 
-            $costCenter = $this->defaultCostCenterLabel($account->costCenter?->name);
+            foreach (ClassificationSlices::forAmount($account, (float) $settlement->value) as $slice) {
+                $costCenter = $this->defaultCostCenterLabel($slice['cost_center_name']);
 
-            if (! isset($groupsMap[$costCenter])) {
-                $groupsMap[$costCenter] = [
-                    'bank_account' => $costCenter,
-                    'total_paid' => 0.0,
-                    'total_received' => 0.0,
-                    'net_balance' => 0.0,
-                ];
-            }
+                if (! isset($groupsMap[$costCenter])) {
+                    $groupsMap[$costCenter] = [
+                        'bank_account' => $costCenter,
+                        'total_paid' => 0.0,
+                        'total_received' => 0.0,
+                        'net_balance' => 0.0,
+                    ];
+                }
 
-            $isReceivable = $account->type === AccountType::Receivable;
+                $isReceivable = $account->type === AccountType::Receivable;
 
-            if ($isReceivable) {
-                $totalReceived += (float) $settlement->value;
-                $groupsMap[$costCenter]['total_received'] += (float) $settlement->value;
-            } else {
-                $totalPaid += (float) $settlement->value;
-                $groupsMap[$costCenter]['total_paid'] += (float) $settlement->value;
+                if ($isReceivable) {
+                    $totalReceived += $slice['value'];
+                    $groupsMap[$costCenter]['total_received'] += $slice['value'];
+                } else {
+                    $totalPaid += $slice['value'];
+                    $groupsMap[$costCenter]['total_paid'] += $slice['value'];
+                }
             }
         }
 
@@ -296,6 +301,7 @@ class ReportService
     private function provisionRawRows(Carbon $fromDate, Carbon $toDate, ?string $bankAccountId): array
     {
         $base = fn () => FinancialAccount::query()
+            ->with(ClassificationSlices::withAccount())
             ->with(['bankAccount:id,uuid,name'])
             ->withSum('settlements', 'value')
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
@@ -317,18 +323,18 @@ class ReportService
                 continue;
             }
 
-            $signedAmount = $account->type === AccountType::Receivable
-                ? $remaining
-                : round(-$remaining, 2);
+            $signedBase = $account->type === AccountType::Receivable ? 1 : -1;
 
-            $rows[] = [
-                'bank_account_id' => $account->bank_account_id,
-                'bank_account_name' => $this->defaultCostCenterLabel($account->costCenter?->name),
-                'account_id' => $account->uuid,
-                'account_description' => $account->description,
-                'due_date' => $account->due_date->toDateString(),
-                'amount' => $signedAmount,
-            ];
+            foreach (ClassificationSlices::forAmount($account, $remaining) as $slice) {
+                $rows[] = [
+                    'bank_account_id' => $account->bank_account_id,
+                    'bank_account_name' => $this->defaultCostCenterLabel($slice['cost_center_name']),
+                    'account_id' => $account->uuid,
+                    'account_description' => $account->description,
+                    'due_date' => $account->due_date->toDateString(),
+                    'amount' => round($signedBase * $slice['value'], 2),
+                ];
+            }
         }
 
         usort($rows, function (array $a, array $b): int {
@@ -474,11 +480,7 @@ class ReportService
         $settlements = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
-            ->with([
-                'account.category:id,uuid,name,type',
-                'account.subcategory:id,uuid,name',
-                'account.costCenter:id,uuid,name',
-            ])
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
             ->get();
@@ -488,34 +490,39 @@ class ReportService
 
         foreach ($settlements as $settlement) {
             $account = $settlement->account;
-            $category = $account?->category;
 
-            if ($category === null || $account === null || $category->type === AccountType::Receivable) {
+            if ($account === null) {
                 continue;
             }
 
-            $costCenter = $this->defaultCostCenterLabel($account->costCenter?->name);
-            $key = $category->name;
+            foreach (ClassificationSlices::forAmount($account, (float) $settlement->value) as $slice) {
+                if ($slice['category_type'] !== CategoryType::Expense->value || $slice['category_name'] === null) {
+                    continue;
+                }
 
-            if (! isset($expense[$key])) {
-                $expense[$key] = 0.0;
+                $costCenter = $this->defaultCostCenterLabel($slice['cost_center_name']);
+                $key = $slice['category_name'];
+
+                if (! isset($expense[$key])) {
+                    $expense[$key] = 0.0;
+                }
+
+                $expense[$key] = round($expense[$key] + $slice['value'], 2);
+
+                if (! isset($groupsMap[$costCenter])) {
+                    $groupsMap[$costCenter] = [
+                        'bank_account' => $costCenter,
+                        'expense' => [],
+                        'total_expense' => 0.0,
+                    ];
+                }
+
+                if (! isset($groupsMap[$costCenter]['expense'][$key])) {
+                    $groupsMap[$costCenter]['expense'][$key] = 0.0;
+                }
+
+                $groupsMap[$costCenter]['expense'][$key] = round($groupsMap[$costCenter]['expense'][$key] + $slice['value'], 2);
             }
-
-            $expense[$key] = round($expense[$key] + (float) $settlement->value, 2);
-
-            if (! isset($groupsMap[$costCenter])) {
-                $groupsMap[$costCenter] = [
-                    'bank_account' => $costCenter,
-                    'expense' => [],
-                    'total_expense' => 0.0,
-                ];
-            }
-
-            if (! isset($groupsMap[$costCenter]['expense'][$key])) {
-                $groupsMap[$costCenter]['expense'][$key] = 0.0;
-            }
-
-            $groupsMap[$costCenter]['expense'][$key] = round($groupsMap[$costCenter]['expense'][$key] + (float) $settlement->value, 2);
         }
 
         $groups = $this->finalizeCategoryGroups($groupsMap);
@@ -542,9 +549,8 @@ class ReportService
 
         foreach ($settlements as $settlement) {
             $account = $settlement->account;
-            $category = $account?->category;
 
-            if ($category === null || $account === null || $category->type !== CategoryType::Expense) {
+            if ($account === null) {
                 continue;
             }
 
@@ -554,43 +560,20 @@ class ReportService
                 continue;
             }
 
-            $costCenter = $this->defaultCostCenterLabel($account->costCenter?->name);
-            $categoryName = $category->name;
-            $amount = round((float) $settlement->value, 2);
-            $accountKey = $account->uuid;
+            foreach (ClassificationSlices::forAmount($account, (float) $settlement->value) as $slice) {
+                if ($slice['category_type'] !== CategoryType::Expense->value || $slice['category_name'] === null) {
+                    continue;
+                }
 
-            if (! isset($groupsMap[$costCenter])) {
-                $groupsMap[$costCenter] = [
-                    'bank_account' => $costCenter,
-                    'categories' => [],
-                    'subtotal' => [
-                        'amounts' => array_fill_keys($monthKeys, 0.0),
-                        'total' => 0.0,
-                    ],
-                ];
-            }
+                $costCenter = $this->defaultCostCenterLabel($slice['cost_center_name']);
+                $categoryName = $slice['category_name'];
+                $amount = $slice['value'];
+                $accountKey = $account->uuid.':'.($slice['allocation_id'] ?? 'header');
 
-            if (! isset($groupsMap[$costCenter]['categories'][$categoryName])) {
-                $groupsMap[$costCenter]['categories'][$categoryName] = [
-                    'category' => $categoryName,
-                    'direct_rows' => [],
-                    'subcategories' => [],
-                    'subtotal' => [
-                        'amounts' => array_fill_keys($monthKeys, 0.0),
-                        'total' => 0.0,
-                    ],
-                ];
-            }
-
-            if ($account->subcategory === null) {
-                $rowBucket = &$groupsMap[$costCenter]['categories'][$categoryName]['direct_rows'];
-            } else {
-                $subcategoryName = $account->subcategory->name;
-
-                if (! isset($groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName])) {
-                    $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName] = [
-                        'subcategory' => $subcategoryName,
-                        'rows' => [],
+                if (! isset($groupsMap[$costCenter])) {
+                    $groupsMap[$costCenter] = [
+                        'bank_account' => $costCenter,
+                        'categories' => [],
                         'subtotal' => [
                             'amounts' => array_fill_keys($monthKeys, 0.0),
                             'total' => 0.0,
@@ -598,30 +581,59 @@ class ReportService
                     ];
                 }
 
-                $rowBucket = &$groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['rows'];
+                if (! isset($groupsMap[$costCenter]['categories'][$categoryName])) {
+                    $groupsMap[$costCenter]['categories'][$categoryName] = [
+                        'category' => $categoryName,
+                        'direct_rows' => [],
+                        'subcategories' => [],
+                        'subtotal' => [
+                            'amounts' => array_fill_keys($monthKeys, 0.0),
+                            'total' => 0.0,
+                        ],
+                    ];
+                }
+
+                if ($slice['subcategory_name'] === null) {
+                    $rowBucket = &$groupsMap[$costCenter]['categories'][$categoryName]['direct_rows'];
+                } else {
+                    $subcategoryName = $slice['subcategory_name'];
+
+                    if (! isset($groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName])) {
+                        $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName] = [
+                            'subcategory' => $subcategoryName,
+                            'rows' => [],
+                            'subtotal' => [
+                                'amounts' => array_fill_keys($monthKeys, 0.0),
+                                'total' => 0.0,
+                            ],
+                        ];
+                    }
+
+                    $rowBucket = &$groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['rows'];
+                }
+
+                if (! isset($rowBucket[$accountKey])) {
+                    $rowBucket[$accountKey] = [
+                        'label' => $account->description,
+                        'amounts' => array_fill_keys($monthKeys, 0.0),
+                        'total' => 0.0,
+                    ];
+                }
+
+                $rowBucket[$accountKey]['amounts'][$monthKey] += $amount;
+                $rowBucket[$accountKey]['total'] += $amount;
+                $groupsMap[$costCenter]['categories'][$categoryName]['subtotal']['amounts'][$monthKey] += $amount;
+                $groupsMap[$costCenter]['categories'][$categoryName]['subtotal']['total'] += $amount;
+
+                if ($slice['subcategory_name'] !== null) {
+                    $subcategoryName = $slice['subcategory_name'];
+                    $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['subtotal']['amounts'][$monthKey] += $amount;
+                    $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['subtotal']['total'] += $amount;
+                }
+
+                $groupsMap[$costCenter]['subtotal']['amounts'][$monthKey] += $amount;
+                $groupsMap[$costCenter]['subtotal']['total'] += $amount;
             }
-
-            if (! isset($rowBucket[$accountKey])) {
-                $rowBucket[$accountKey] = [
-                    'label' => $account->description,
-                    'amounts' => array_fill_keys($monthKeys, 0.0),
-                    'total' => 0.0,
-                ];
-            }
-
-            $rowBucket[$accountKey]['amounts'][$monthKey] += $amount;
-            $rowBucket[$accountKey]['total'] += $amount;
-            $groupsMap[$costCenter]['categories'][$categoryName]['subtotal']['amounts'][$monthKey] += $amount;
-            $groupsMap[$costCenter]['categories'][$categoryName]['subtotal']['total'] += $amount;
-
-            if ($account->subcategory !== null) {
-                $subcategoryName = $account->subcategory->name;
-                $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['subtotal']['amounts'][$monthKey] += $amount;
-                $groupsMap[$costCenter]['categories'][$categoryName]['subcategories'][$subcategoryName]['subtotal']['total'] += $amount;
-            }
-
-            $groupsMap[$costCenter]['subtotal']['amounts'][$monthKey] += $amount;
-            $groupsMap[$costCenter]['subtotal']['total'] += $amount;
         }
 
         $groups = [];
@@ -973,7 +985,7 @@ class ReportService
         $todayString = $today->toDateString();
 
         $accounts = FinancialAccount::query()
-            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name'])
+            ->with(array_merge(ClassificationSlices::withAccount(), ['bankAccount:id,uuid,name']))
             ->withSum('settlements', 'value')
             ->where('type', AccountType::Payable)
             ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
@@ -1002,26 +1014,30 @@ class ReportService
             $isOverdue = $account->due_date->lt($today);
             $isDueToday = $account->due_date->toDateString() === $todayString;
 
-            $rows[] = [
-                'id' => $account->uuid,
-                'description' => $account->description,
-                'counterparty' => $account->counterparty,
-                'bank_account_id' => $account->bank_account_id,
-                'bank_account' => $account->costCenter?->name,
-                'category' => $account->category?->name,
-                'value' => (float) $account->value,
-                'remaining_amount' => $remaining,
-                'due_date' => $account->due_date->toDateString(),
-                'installment' => $account->installment_total > 1 ? "{$account->installment_number}/{$account->installment_total}" : null,
-                'status' => $account->status->value,
-                'is_overdue' => $isOverdue,
-                'is_due_today' => $isDueToday,
-            ];
+            foreach (ClassificationSlices::forAmount($account, $remaining) as $slice) {
+                $rows[] = [
+                    'id' => $slice['allocation_id']
+                        ? $account->uuid.':'.$slice['allocation_id']
+                        : $account->uuid,
+                    'description' => $account->description,
+                    'counterparty' => $account->counterparty,
+                    'bank_account_id' => $account->bank_account_id,
+                    'bank_account' => $slice['cost_center_name'],
+                    'category' => $slice['category_name'],
+                    'value' => $slice['value'],
+                    'remaining_amount' => $slice['value'],
+                    'due_date' => $account->due_date->toDateString(),
+                    'installment' => $account->installment_total > 1 ? "{$account->installment_number}/{$account->installment_total}" : null,
+                    'status' => $account->status->value,
+                    'is_overdue' => $isOverdue,
+                    'is_due_today' => $isDueToday,
+                ];
 
-            $totalOpen += $remaining;
+                $totalOpen += $slice['value'];
 
-            if ($isOverdue || $isDueToday) {
-                $totalOverdue += $remaining;
+                if ($isOverdue || $isDueToday) {
+                    $totalOverdue += $slice['value'];
+                }
             }
         }
 

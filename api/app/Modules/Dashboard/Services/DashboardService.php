@@ -5,10 +5,11 @@ namespace App\Modules\Dashboard\Services;
 use App\Modules\Account\Enums\AccountType;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\Account\Support\ClassificationSlices;
 use App\Modules\CashFlow\Services\CashFlowService;
 use App\Modules\Category\Enums\CategoryType;
 use App\Modules\BankAccount\Models\BankAccount;
-use App\Modules\Report\Services\ReportService;
+use App\Modules\CostCenter\Models\CostCenter;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -16,23 +17,22 @@ class DashboardService
 {
     public function __construct(
         private readonly CashFlowService $cashFlow,
-        private readonly ReportService $reports,
     ) {}
 
     /**
      * @return array<string, mixed>
      */
-    public function summary(?string $bankAccountId = null): array
+    public function summary(?string $costCenterId = null): array
     {
         $today = now()->startOfDay();
         $monthStart = now()->startOfMonth();
         $monthEnd = now()->endOfMonth();
 
         $openAccounts = FinancialAccount::query()
-            ->with(['bankAccount:id,uuid,name', 'category:id,uuid,name,type'])
+            ->with(array_merge(ClassificationSlices::withAccount(), ['bankAccount:id,uuid,name']))
             ->whereIn('status', ['open', 'partial'])
             ->countingFinancially()
-            ->forBankAccount($bankAccountId)
+            ->forCostCenter($costCenterId)
             ->withSum('settlements', 'value')
             ->get();
 
@@ -43,40 +43,47 @@ class DashboardService
             ->where('due_date', '<', $today)
             ->sortBy('due_date');
 
-        $projected = $this->cashFlow->projected(null, null, 7, $bankAccountId);
+        $projected = $this->cashFlow->projected(days: 7, costCenterId: $costCenterId);
         $finalProjectedBalance = $projected['series'][count($projected['series']) - 1]['projected_balance'] ?? null;
 
+        $remainingOf = fn (FinancialAccount $account): float => ClassificationSlices::amountMatching(
+            $account,
+            round((float) $account->value - (float) ($account->settlements_sum_value ?? 0), 2),
+            $costCenterId,
+        );
+
         return [
-            'bank_accounts' => $this->costCenters(),
-            'selected_bank_account_id' => $bankAccountId,
+            'cost_centers' => $this->costCenters(),
+            'selected_cost_center_id' => $costCenterId,
             'kpis' => [
-                'current_balance' => $this->currentBalance($bankAccountId),
-                'month_income' => $this->settledBetween($monthStart, $monthEnd, AccountType::Receivable, $bankAccountId),
-                'month_expense' => $this->settledBetween($monthStart, $monthEnd, AccountType::Payable, $bankAccountId),
+                'current_balance' => $this->currentBalance($costCenterId),
+                'month_income' => $this->settledBetween($monthStart, $monthEnd, AccountType::Receivable, $costCenterId),
+                'month_expense' => $this->settledBetween($monthStart, $monthEnd, AccountType::Payable, $costCenterId),
                 'month_result' => round(
-                    $this->settledBetween($monthStart, $monthEnd, AccountType::Receivable, $bankAccountId)
-                    - $this->settledBetween($monthStart, $monthEnd, AccountType::Payable, $bankAccountId),
+                    $this->settledBetween($monthStart, $monthEnd, AccountType::Receivable, $costCenterId)
+                    - $this->settledBetween($monthStart, $monthEnd, AccountType::Payable, $costCenterId),
                     2,
                 ),
-                'receivable_open' => round($receivableOpen->sum(fn (FinancialAccount $a) => $a->value - $a->settlements_sum_value), 2),
-                'payable_open' => round($payableOpen->sum(fn (FinancialAccount $a) => $a->value - $a->settlements_sum_value), 2),
-                'overdue_total' => round($overdue->sum(fn (FinancialAccount $a) => $a->value - $a->settlements_sum_value), 2),
+                'receivable_open' => round($receivableOpen->sum($remainingOf), 2),
+                'payable_open' => round($payableOpen->sum($remainingOf), 2),
+                'overdue_total' => round($overdue->sum($remainingOf), 2),
                 'overdue_count' => $overdue->count(),
                 'projected_7d' => round($projected['total_in'] - $projected['total_out'], 2),
                 'projected_balance' => $finalProjectedBalance,
             ],
-            'cash_flow_series' => $this->monthlyCashFlowSeries($bankAccountId),
+            'cash_flow_series' => $this->monthlyCashFlowSeries($costCenterId),
             'projected_series' => $projected['series'],
-            'expense_by_category' => $this->byCategory($monthStart, $monthEnd, CategoryType::Expense, $bankAccountId),
-            'income_by_category' => $this->byCategory($monthStart, $monthEnd, CategoryType::Income, $bankAccountId),
-            'balance_by_bank_account' => $this->balanceByCostCenter($bankAccountId),
-            'overdue' => $this->presentAccounts($overdue->take(8)),
+            'expense_by_category' => $this->byCategory($monthStart, $monthEnd, CategoryType::Expense, $costCenterId),
+            'income_by_category' => $this->byCategory($monthStart, $monthEnd, CategoryType::Income, $costCenterId),
+            'balance_by_bank_account' => $this->balanceByBankAccount($costCenterId),
+            'overdue' => $this->presentAccounts($overdue->take(8), $costCenterId),
             'upcoming' => $this->presentAccounts(
                 $openAccounts
                     ->where('due_date', '>=', $today)
                     ->where('due_date', '<=', now()->addDays(30)->endOfDay())
                     ->sortBy('due_date')
                     ->take(8),
+                $costCenterId,
             ),
             'payables_next_7d' => $this->presentAccounts(
                 $payableOpen
@@ -84,12 +91,13 @@ class DashboardService
                     ->where('due_date', '<=', now()->addDays(7)->endOfDay())
                     ->sortBy('due_date')
                     ->values(),
+                $costCenterId,
             ),
             'payables_next_7d_total' => round(
                 $payableOpen
                     ->where('due_date', '>=', $today)
                     ->where('due_date', '<=', now()->addDays(7)->endOfDay())
-                    ->sum(fn (FinancialAccount $a) => $a->value - $a->settlements_sum_value),
+                    ->sum($remainingOf),
                 2,
             ),
         ];
@@ -100,39 +108,38 @@ class DashboardService
      */
     private function costCenters(): array
     {
-        return BankAccount::query()
+        return CostCenter::query()
+            ->where('status', 'active')
             ->orderBy('name')
             ->get(['uuid', 'name'])
-            ->map(fn (BankAccount $account) => ['id' => $account->uuid, 'name' => $account->name])
+            ->map(fn (CostCenter $costCenter) => ['id' => $costCenter->uuid, 'name' => $costCenter->name])
             ->all();
     }
 
-    private function currentBalance(?string $bankAccountId): float
+    private function currentBalance(?string $costCenterId): float
     {
-        $initial = (float) BankAccount::query()
-            ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
-            ->sum('initial_balance');
+        $initial = $costCenterId
+            ? 0.0
+            : (float) BankAccount::query()->sum('initial_balance');
 
-        $base = fn () => Settlement::query()
-            ->countingFinancially()
-            ->forBankAccount($bankAccountId);
-
-        $in = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Receivable->value))->sum('value');
-        $out = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Payable->value))->sum('value');
-
-        return round($initial + $in - $out, 2);
+        return round($initial + $this->netSettledAmount(null, $costCenterId), 2);
     }
 
-    private function settledBetween(Carbon $from, Carbon $to, AccountType $type, ?string $bankAccountId): float
+    private function settledBetween(Carbon $from, Carbon $to, AccountType $type, ?string $costCenterId): float
     {
+        $settlements = Settlement::query()
+            ->countingFinancially()
+            ->whereDate('settled_at', '>=', $from->toDateString())
+            ->whereDate('settled_at', '<=', $to->toDateString())
+            ->whereHas('account', fn ($q) => $q->where('type', $type->value))
+            ->forCostCenter($costCenterId)
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
+            ->get();
+
         return round(
-            (float) Settlement::query()
-                ->countingFinancially()
-                ->whereDate('settled_at', '>=', $from->toDateString())
-                ->whereDate('settled_at', '<=', $to->toDateString())
-                ->whereHas('account', fn ($q) => $q->where('type', $type->value))
-                ->forBankAccount($bankAccountId)
-                ->sum('value'),
+            $settlements->sum(fn (Settlement $settlement) => $settlement->account === null
+                ? 0.0
+                : ClassificationSlices::amountMatching($settlement->account, (float) $settlement->value, $costCenterId)),
             2,
         );
     }
@@ -140,22 +147,20 @@ class DashboardService
     /**
      * @return list<array{month: string, label: string, income: float, expense: float, balance: float}>
      */
-    private function monthlyCashFlowSeries(?string $bankAccountId): array
+    private function monthlyCashFlowSeries(?string $costCenterId): array
     {
         $windowStart = now()->startOfMonth()->subMonths(11);
 
         $settlements = Settlement::query()
             ->countingFinancially()
-            ->with('account:id,type,bank_account_id')
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
             ->whereDate('settled_at', '>=', $windowStart->toDateString())
-            ->forBankAccount($bankAccountId)
+            ->forCostCenter($costCenterId)
             ->get();
 
         $balance = round(
-            (float) BankAccount::query()
-                ->when($bankAccountId, fn ($q) => $q->where('uuid', $bankAccountId))
-                ->sum('initial_balance')
-            + $this->netSettledBefore($windowStart, $bankAccountId),
+            ($costCenterId ? 0.0 : (float) BankAccount::query()->sum('initial_balance'))
+            + $this->netSettledAmount($windowStart->copy()->subSecond(), $costCenterId),
             2,
         );
 
@@ -169,8 +174,16 @@ class DashboardService
 
             $items = $settlements->filter(fn (Settlement $s) => $s->settled_at->format('Y-m') === $key);
 
-            $income = round((float) $items->filter(fn (Settlement $s) => $s->account?->type === AccountType::Receivable)->sum('value'), 2);
-            $expense = round((float) $items->filter(fn (Settlement $s) => $s->account?->type === AccountType::Payable)->sum('value'), 2);
+            $income = round($items
+                ->filter(fn (Settlement $s) => $s->account?->type === AccountType::Receivable)
+                ->sum(fn (Settlement $s) => $s->account === null
+                    ? 0.0
+                    : ClassificationSlices::amountMatching($s->account, (float) $s->value, $costCenterId)), 2);
+            $expense = round($items
+                ->filter(fn (Settlement $s) => $s->account?->type === AccountType::Payable)
+                ->sum(fn (Settlement $s) => $s->account === null
+                    ? 0.0
+                    : ClassificationSlices::amountMatching($s->account, (float) $s->value, $costCenterId)), 2);
             $balance = round($balance + $income - $expense, 2);
 
             $series[] = [
@@ -185,15 +198,35 @@ class DashboardService
         return $series;
     }
 
-    private function netSettledBefore(Carbon $upTo, ?string $bankAccountId): float
+    private function netSettledAmount(?Carbon $upTo, ?string $costCenterId): float
     {
-        $base = fn () => Settlement::query()
+        $query = Settlement::query()
             ->countingFinancially()
-            ->whereDate('settled_at', '<', $upTo->toDateString())
-            ->forBankAccount($bankAccountId);
+            ->forCostCenter($costCenterId)
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())]);
 
-        $in = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Receivable->value))->sum('value');
-        $out = (float) $base()->whereHas('account', fn ($q) => $q->where('type', AccountType::Payable->value))->sum('value');
+        if ($upTo !== null) {
+            $query->whereDate('settled_at', '<=', $upTo->toDateString());
+        }
+
+        $in = 0.0;
+        $out = 0.0;
+
+        foreach ($query->get() as $settlement) {
+            $account = $settlement->account;
+
+            if ($account === null) {
+                continue;
+            }
+
+            $amount = ClassificationSlices::amountMatching($account, (float) $settlement->value, $costCenterId);
+
+            if ($account->type === AccountType::Receivable) {
+                $in += $amount;
+            } else {
+                $out += $amount;
+            }
+        }
 
         return round($in - $out, 2);
     }
@@ -201,22 +234,37 @@ class DashboardService
     /**
      * @return list<array{category: string, total: float}>
      */
-    private function byCategory(Carbon $from, Carbon $to, CategoryType $type, ?string $bankAccountId): array
+    private function byCategory(Carbon $from, Carbon $to, CategoryType $type, ?string $costCenterId): array
     {
         $settlements = Settlement::query()
             ->countingFinancially()
-            ->forBankAccount($bankAccountId)
-            ->with('account.category:id,uuid,name,type')
+            ->forCostCenter($costCenterId)
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
             ->whereDate('settled_at', '>=', $from->toDateString())
             ->whereDate('settled_at', '<=', $to->toDateString())
-            ->get()
-            ->filter(fn (Settlement $s) => $s->account?->category !== null && $s->account->category->type === $type);
+            ->get();
 
         $totals = [];
 
         foreach ($settlements as $settlement) {
-            $name = $settlement->account->category->name;
-            $totals[$name] = round(($totals[$name] ?? 0) + (float) $settlement->value, 2);
+            $account = $settlement->account;
+
+            if ($account === null) {
+                continue;
+            }
+
+            foreach (ClassificationSlices::forAmount($account, (float) $settlement->value) as $slice) {
+                if ($slice['category_type'] !== $type->value || $slice['category_name'] === null) {
+                    continue;
+                }
+
+                if ($costCenterId && $slice['cost_center_id'] !== $costCenterId) {
+                    continue;
+                }
+
+                $name = $slice['category_name'];
+                $totals[$name] = round(($totals[$name] ?? 0) + $slice['value'], 2);
+            }
         }
 
         arsort($totals);
@@ -231,12 +279,48 @@ class DashboardService
     /**
      * @return list<array<string, mixed>>
      */
-    private function balanceByCostCenter(?string $bankAccountId): array
+    private function balanceByBankAccount(?string $costCenterId): array
     {
-        $rows = $this->reports->byCostCenter()['rows'];
+        $banks = BankAccount::query()->orderBy('name')->get();
+        $rows = [];
 
-        if ($bankAccountId !== null) {
-            $rows = array_values(array_filter($rows, fn (array $row) => $row['bank_account_id'] === $bankAccountId));
+        foreach ($banks as $bank) {
+            $settlements = Settlement::query()
+                ->countingFinancially()
+                ->forBankAccount($bank->uuid)
+                ->forCostCenter($costCenterId)
+                ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
+                ->get();
+
+            $income = 0.0;
+            $expense = 0.0;
+
+            foreach ($settlements as $settlement) {
+                $account = $settlement->account;
+
+                if ($account === null) {
+                    continue;
+                }
+
+                $amount = ClassificationSlices::amountMatching($account, (float) $settlement->value, $costCenterId);
+
+                if ($account->type === AccountType::Receivable) {
+                    $income += $amount;
+                } else {
+                    $expense += $amount;
+                }
+            }
+
+            $initial = $costCenterId ? 0.0 : (float) $bank->initial_balance;
+
+            $rows[] = [
+                'bank_account_id' => $bank->uuid,
+                'bank_account' => $bank->name,
+                'initial_balance' => $initial,
+                'income' => round($income, 2),
+                'expense' => round($expense, 2),
+                'balance' => round($initial + $income - $expense, 2),
+            ];
         }
 
         return $rows;
@@ -246,20 +330,31 @@ class DashboardService
      * @param  Collection<int, FinancialAccount>  $accounts
      * @return list<array<string, mixed>>
      */
-    private function presentAccounts($accounts): array
+    private function presentAccounts($accounts, ?string $costCenterId = null): array
     {
         return $accounts
-            ->map(fn (FinancialAccount $a) => [
-                'id' => $a->uuid,
-                'description' => $a->description,
-                'counterparty' => $a->counterparty,
-                'type' => $a->type->value,
-                'bank_account' => $a->bankAccount?->name,
-                'category' => $a->category?->name,
-                'value' => (float) $a->value,
-                'remaining_amount' => round((float) $a->value - (float) ($a->settlements_sum_value ?? 0), 2),
-                'due_date' => $a->due_date->toDateString(),
-            ])
+            ->map(function (FinancialAccount $a) use ($costCenterId) {
+                $remaining = round((float) $a->value - (float) ($a->settlements_sum_value ?? 0), 2);
+                $category = $a->isSplit()
+                    ? $a->allocations
+                        ->map(fn ($allocation) => $allocation->category?->name)
+                        ->filter()
+                        ->unique()
+                        ->implode(' / ')
+                    : $a->category?->name;
+
+                return [
+                    'id' => $a->uuid,
+                    'description' => $a->description,
+                    'counterparty' => $a->counterparty,
+                    'type' => $a->type->value,
+                    'bank_account' => $a->bankAccount?->name,
+                    'category' => $category !== '' ? $category : $a->category?->name,
+                    'value' => (float) $a->value,
+                    'remaining_amount' => ClassificationSlices::amountMatching($a, $remaining, $costCenterId),
+                    'due_date' => $a->due_date->toDateString(),
+                ];
+            })
             ->values()
             ->all();
     }

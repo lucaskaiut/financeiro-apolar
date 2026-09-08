@@ -33,6 +33,7 @@ class AccountResource extends JsonResource
             'credit_card_invoice_id' => $this->credit_card_invoice_id,
             'is_card_purchase' => $this->is_card_purchase,
             'is_card_invoice_payable' => $this->is_card_invoice_payable,
+            'allocation_mode' => $this->allocation_mode?->value ?? $this->allocation_mode,
             'category_id' => $this->category?->uuid,
             'category' => $this->whenLoaded('category', fn () => [
                 'name' => $this->category?->name,
@@ -59,6 +60,7 @@ class AccountResource extends JsonResource
             'recurrence_id' => $this->whenLoaded('recurrence', fn () => $this->recurrence?->uuid),
             'transfer_id' => $this->transfer_id,
             'is_reconciled' => $this->isReconciled(),
+            'allocations' => AccountAllocationResource::collection($this->whenLoaded('allocations')),
             'settlements' => SettlementResource::collection($this->whenLoaded('settlements')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

@@ -100,6 +100,16 @@ export default function AccountEditPage() {
                 installments: false,
                 installment_quantity: '2',
                 installment_interval: 'monthly',
+                split: query.data.allocation_mode === 'split',
+                allocations:
+                  query.data.allocation_mode === 'split' && query.data.allocations && query.data.allocations.length > 0
+                    ? query.data.allocations.map((line) => ({
+                        category_id: line.category_id ?? '',
+                        subcategory_id: line.subcategory_id ?? '',
+                        cost_center_id: line.cost_center_id ?? '',
+                        value: String(line.value),
+                      }))
+                    : [],
               }}
               submitting={update.isPending}
               hasSettlement={hasSettlement}

@@ -47,6 +47,7 @@ class AccountController extends ApiController
                 'overdue',
                 'bank_account_id',
                 'credit_card_id',
+                'cost_center_id',
                 'category_id',
                 'due_from',
                 'due_to',
@@ -104,6 +105,7 @@ class AccountController extends ApiController
             'tenant_id' => TenantContext::tenantId(),
             'user_id' => $request->user()?->getKey(),
             'bank_account_id' => $request->string('bank_account_id')->toString(),
+            'cost_center_id' => $request->string('cost_center_id')->toString(),
             'filename' => $file->getClientOriginalName(),
             'content' => base64_encode($file->get()),
         ]);

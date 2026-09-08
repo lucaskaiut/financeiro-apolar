@@ -4,6 +4,7 @@ namespace App\Modules\Account\Models;
 
 use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Enums\AccountType;
+use App\Modules\Account\Enums\AllocationMode;
 use App\Modules\BankAccount\Models\BankAccount;
 use App\Modules\Category\Models\Category;
 use App\Modules\Company\Models\Company;
@@ -62,6 +63,7 @@ class FinancialAccount extends Model
         return [
             'type' => AccountType::class,
             'status' => AccountStatus::class,
+            'allocation_mode' => AllocationMode::class,
             'value' => 'decimal:2',
             'due_date' => DateOnlyCast::class,
             'purchase_date' => DateOnlyCast::class,
@@ -167,6 +169,15 @@ class FinancialAccount extends Model
         return (bool) $this->is_card_invoice_payable;
     }
 
+    public function isSplit(): bool
+    {
+        if ($this->allocation_mode === AllocationMode::Split) {
+            return true;
+        }
+
+        return $this->relationLoaded('allocations') && $this->allocations->isNotEmpty();
+    }
+
     public function countsForEconomicReports(): bool
     {
         return ! $this->is_card_invoice_payable;
@@ -205,6 +216,38 @@ class FinancialAccount extends Model
                     $card->where('is_card_purchase', true)
                         ->whereHas('creditCard', fn ($c) => $c->where('bank_account_id', $bankAccountId));
                 });
+        });
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<FinancialAccount>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<FinancialAccount>
+     */
+    public function scopeForCostCenter($query, ?string $costCenterId)
+    {
+        if ($costCenterId === null || $costCenterId === '') {
+            return $query;
+        }
+
+        return $query->where(function ($inner) use ($costCenterId): void {
+            $inner->where('cost_center_id', $costCenterId)
+                ->orWhereHas('allocations', fn ($a) => $a->where('cost_center_id', $costCenterId));
+        });
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<FinancialAccount>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<FinancialAccount>
+     */
+    public function scopeForCategory($query, ?string $categoryId)
+    {
+        if ($categoryId === null || $categoryId === '') {
+            return $query;
+        }
+
+        return $query->where(function ($inner) use ($categoryId): void {
+            $inner->where('category_id', $categoryId)
+                ->orWhereHas('allocations', fn ($a) => $a->where('category_id', $categoryId));
         });
     }
 

@@ -9,6 +9,7 @@ use App\Modules\Shared\Support\DateOnly;
 use App\Modules\Tenant\Support\Facades\TenantContext;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateAccountRequest extends FormRequest
 {
@@ -24,6 +25,7 @@ class UpdateAccountRequest extends FormRequest
     {
         $account = $this->route('account');
         $isCardPurchase = $account instanceof FinancialAccount && (bool) $account->is_card_purchase;
+        $tenantId = TenantContext::tenantId();
 
         return [
             'type' => ['sometimes', 'required', 'string', Rule::in(AccountType::values())],
@@ -33,29 +35,35 @@ class UpdateAccountRequest extends FormRequest
                 'sometimes',
                 $isCardPurchase ? 'nullable' : 'required',
                 'string',
-                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'company_id' => [
                 'nullable',
                 'string',
-                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('companies', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'cost_center_id' => [
                 'nullable',
                 'string',
-                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'category_id' => [
-                'sometimes',
-                'required',
+                Rule::requiredIf(function () {
+                    if (! $this->exists('allocations')) {
+                        return false;
+                    }
+
+                    return ! AccountAllocationValidation::hasAllocations($this->input('allocations'));
+                }),
+                'nullable',
                 'string',
-                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+                Rule::exists('categories', 'uuid')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
             'subcategory_id' => [
                 'nullable',
                 'string',
                 Rule::exists('categories', 'uuid')->where(fn ($q) => $q
-                    ->where('tenant_id', TenantContext::tenantId())
+                    ->where('tenant_id', $tenantId)
                     ->whereNotNull('parent_id')),
             ],
             'value' => ['sometimes', 'required', 'numeric', 'gt:0'],
@@ -64,7 +72,30 @@ class UpdateAccountRequest extends FormRequest
             'expected_date' => ['nullable', 'date'],
             'paid_date' => ['nullable', 'date'],
             'observation' => ['nullable', 'string'],
+            ...AccountAllocationValidation::rules($tenantId),
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if (! $this->exists('allocations')) {
+                return;
+            }
+
+            AccountAllocationValidation::after(
+                $validator,
+                function (): float {
+                    if ($this->filled('value')) {
+                        return (float) $this->input('value');
+                    }
+
+                    $account = $this->route('account');
+
+                    return $account instanceof FinancialAccount ? (float) $account->value : 0.0;
+                },
+            );
+        });
     }
 
     protected function prepareForValidation(): void
@@ -90,6 +121,7 @@ class UpdateAccountRequest extends FormRequest
         $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date', 'paid_date']);
 
         $this->fillCategoryFromSubcategory();
+        $this->merge(AccountAllocationValidation::fillCategoriesFromSubcategories($this->all()));
     }
 
     /**

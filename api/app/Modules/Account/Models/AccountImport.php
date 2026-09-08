@@ -10,6 +10,7 @@ class AccountImport extends Model
         'tenant_id',
         'user_id',
         'bank_account_id',
+        'cost_center_id',
         'filename',
         'content',
     ];

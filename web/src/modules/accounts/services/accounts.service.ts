@@ -20,6 +20,15 @@ export interface AccountPayload {
   paid_date?: string | null
   observation?: string | null
   installments?: { quantity: number; interval?: 'daily' | 'weekly' | 'monthly' } | null
+  allocations?: AccountAllocationPayload[] | null
+}
+
+export interface AccountAllocationPayload {
+  category_id: string
+  subcategory_id?: string | null
+  cost_center_id?: string | null
+  company_id?: string | null
+  value: number
 }
 
 export interface SettlePayload {
@@ -47,10 +56,11 @@ export const accountsService = {
     return response.data
   },
 
-  async importXlsx(file: File, bank_account_id: string): Promise<void> {
+  async importXlsx(file: File, bank_account_id: string, cost_center_id: string): Promise<void> {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('bank_account_id', bank_account_id)
+    formData.append('cost_center_id', cost_center_id)
 
     await http.post('/accounts/import', formData)
   },

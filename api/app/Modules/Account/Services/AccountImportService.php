@@ -13,32 +13,46 @@ use App\Modules\Category\Models\Category;
 use App\Modules\User\Models\User;
 use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Normalizer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use RuntimeException;
 
 class AccountImportService
 {
+    /** @var list<string> */
+    private const PAID_STATUSES = ['pago', 'paga', 'baixada', 'baixado', 'liquidado', 'liquidada', 'settled', 'paid'];
+
+    /** @var list<string> */
+    private const OPEN_STATUSES = ['a vencer', 'vencido', 'vencida', 'aberto', 'aberta', 'previsto', 'open', 'overdue'];
+
     public function __construct(private readonly AuditLogService $audit) {}
 
     /**
      * Importa contas a pagar a partir de uma planilha XLSX.
      *
-     * Colunas esperadas (detectadas pelo cabeçalho):
-     * - Data        → vencimento
-     * - Histórico   → descrição
-     * - Débito (R$) → valor
-     * - GRUPO       → categoria (criada/reatilizada automaticamente)
-     * - TIPO        → subcategoria (criada/reatilizada sob a categoria)
-     * - CONSIDERAR  → importa apenas linhas vazias ou "SIM"
+     * Formato Apolar (aba "BASE DE DADOS"):
+     * - GRUPO              → categoria (criada automaticamente)
+     * - TIPO DE DESPESA    → subcategoria (criada automaticamente)
+     * - TIPO DE DESPESA 2  → descrição (senão usa TIPO DE DESPESA)
+     * - VENCIMENTO         → vencimento
+     * - PGTO               → data de pagamento (se vazia e a conta estiver paga, usa o vencimento)
+     * - STATUS             → Pago/Baixada liquida; A Vencer/Vencido permanece em aberto
+     * - $ REALIZADO / R$ PREVISTO → valor
+     * - OBSERVAÇÃO         → observação
+     *
+     * Formato legado: Data, Histórico, Débito/Valor, GRUPO, TIPO, CONSIDERAR.
      *
      * @return array{imported: int, skipped: int}
      */
-    public function importXlsx(UploadedFile $file, string $bankAccountId, User $user): array
+    public function importXlsx(UploadedFile $file, string $bankAccountId, User $user, ?string $costCenterId = null): array
     {
         $spreadsheet = IOFactory::load($file->getRealPath());
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, false);
+        $sheet = $this->resolveSheet($spreadsheet);
+        $rows = $this->extractRows($sheet);
         $spreadsheet->disconnectWorksheets();
 
         if (count($rows) < 2) {
@@ -46,20 +60,18 @@ class AccountImportService
         }
 
         $headers = array_map(fn ($cell) => $this->normalize($cell), $rows[0]);
+        $columns = $this->mapColumns($headers);
 
-        $colDate = $this->findColumn($headers, 'data');
-        $colDescription = $this->findColumn($headers, 'historico');
-        $colValue = $this->findColumn($headers, 'debito') ?? $this->findColumn($headers, 'valor');
-        $colSubcategory = $this->findColumn($headers, 'tipo');
-        $colFlag = $this->findColumn($headers, 'considerar');
-        $colCategory = $this->findColumn($headers, 'grupo');
-
-        if ($colDescription === null || $colValue === null) {
-            throw new RuntimeException('Não foi possível identificar as colunas "Histórico" e a coluna de valor (Débito/Valor) no cabeçalho.');
+        if ($columns['category'] === null) {
+            throw new RuntimeException('Não foi possível identificar a coluna "GRUPO" no cabeçalho.');
         }
 
-        if ($colCategory === null) {
-            throw new RuntimeException('Não foi possível identificar a coluna "GRUPO" no cabeçalho.');
+        if ($columns['description'] === null && $columns['descriptionDetail'] === null) {
+            throw new RuntimeException('Não foi possível identificar a coluna de descrição ("Histórico" ou "TIPO DE DESPESA") no cabeçalho.');
+        }
+
+        if ($columns['value'] === null && $columns['forecast'] === null && $columns['realized'] === null) {
+            throw new RuntimeException('Não foi possível identificar a coluna de valor (Débito/Valor, R$ PREVISTO ou $ REALIZADO) no cabeçalho.');
         }
 
         /** @var array<string, Category> $categories */
@@ -70,64 +82,311 @@ class AccountImportService
         $imported = 0;
         $skipped = 0;
 
-        foreach (array_slice($rows, 1) as $row) {
-            $flag = $this->normalize($row[$colFlag] ?? null);
+        DB::transaction(function () use (
+            $rows,
+            $columns,
+            $bankAccountId,
+            $costCenterId,
+            $user,
+            &$categories,
+            &$subcategories,
+            &$imported,
+            &$skipped,
+        ): void {
+            foreach (array_slice($rows, 1) as $row) {
+                if (! $this->shouldImport($row, $columns['flag'])) {
+                    $skipped++;
 
-            if ($flag !== '' && ! in_array($flag, ['sim', 's', 'x', 'yes', '1'], true)) {
-                $skipped++;
+                    continue;
+                }
 
-                continue;
+                $categoryName = trim((string) ($row[$columns['category']] ?? ''));
+                $subcategoryName = $columns['subcategory'] !== null
+                    ? trim((string) ($row[$columns['subcategory']] ?? ''))
+                    : '';
+                $description = $this->resolveDescription($row, $columns);
+                $dueDate = $columns['dueDate'] !== null ? $this->parseDate($row[$columns['dueDate']] ?? null) : null;
+                $paid = $this->isPaid($row, $columns);
+                $amount = $this->resolveAmount($row, $columns, $paid);
+                $observation = $columns['observation'] !== null
+                    ? trim((string) ($row[$columns['observation']] ?? ''))
+                    : '';
+
+                if ($description === '' || $amount === null || $dueDate === null || $categoryName === '') {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $category = $this->findOrCreateCategory($categories, $categoryName);
+                $subcategory = $this->findOrCreateSubcategory($subcategories, $category, $subcategoryName);
+                $paidDate = $paid ? $this->resolvePaidDate($row, $columns, $dueDate) : null;
+
+                $account = FinancialAccount::query()->create([
+                    'type' => AccountType::Payable,
+                    'description' => mb_substr($description, 0, 255),
+                    'value' => $amount,
+                    'due_date' => $dueDate,
+                    'paid_date' => $paidDate,
+                    'bank_account_id' => $bankAccountId,
+                    'cost_center_id' => $costCenterId,
+                    'category_id' => $category->uuid,
+                    'subcategory_id' => $subcategory?->uuid,
+                    'observation' => $observation !== '' ? $observation : null,
+                    'status' => $paid ? AccountStatus::Settled : AccountStatus::Open,
+                ]);
+
+                if ($paid) {
+                    Settlement::query()->create([
+                        'account_id' => $account->getKey(),
+                        'value' => $amount,
+                        'settled_at' => $paidDate,
+                        'method' => null,
+                        'user_id' => $user->getKey(),
+                    ]);
+                }
+
+                $this->audit->recordEntity(
+                    $user,
+                    AuditAction::FinancialCreate,
+                    'account',
+                    $account->uuid,
+                    ['description' => $account->description, 'settled' => $paid, 'source' => 'xlsx_import'],
+                );
+
+                $imported++;
             }
-
-            $description = trim((string) ($row[$colDescription] ?? ''));
-            $value = $this->parseMoney($row[$colValue] ?? null);
-            $date = $colDate !== null ? $this->parseDate($row[$colDate] ?? null) : null;
-            $categoryName = trim((string) ($row[$colCategory] ?? ''));
-            $subcategoryName = $colSubcategory !== null ? trim((string) ($row[$colSubcategory] ?? '')) : '';
-
-            if ($description === '' || $value === null || abs($value) <= 0 || $date === null || $categoryName === '') {
-                $skipped++;
-
-                continue;
-            }
-
-            $category = $this->findOrCreateCategory($categories, $categoryName);
-            $subcategory = $this->findOrCreateSubcategory($subcategories, $category, $subcategoryName);
-
-            $amount = round(abs($value), 2);
-
-            $account = FinancialAccount::query()->create([
-                'type' => AccountType::Payable,
-                'description' => $description,
-                'value' => $amount,
-                'due_date' => $date,
-                'paid_date' => $date,
-                'bank_account_id' => $bankAccountId,
-                'category_id' => $category->uuid,
-                'subcategory_id' => $subcategory?->uuid,
-                'status' => AccountStatus::Settled,
-            ]);
-
-            Settlement::query()->create([
-                'account_id' => $account->getKey(),
-                'value' => $amount,
-                'settled_at' => $date,
-                'method' => null,
-                'user_id' => $user->getKey(),
-            ]);
-
-            $this->audit->recordEntity(
-                $user,
-                AuditAction::FinancialCreate,
-                'account',
-                $account->uuid,
-                ['description' => $account->description, 'settled' => true, 'source' => 'xlsx_import'],
-            );
-
-            $imported++;
-        }
+        });
 
         return ['imported' => $imported, 'skipped' => $skipped];
+    }
+
+    private function resolveSheet(Spreadsheet $spreadsheet): Worksheet
+    {
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            if ($this->normalize($sheet->getTitle()) === 'base de dados') {
+                return $sheet;
+            }
+        }
+
+        foreach ($spreadsheet->getWorksheetIterator() as $sheet) {
+            $headers = array_map(
+                fn ($cell) => $this->normalize($cell),
+                $sheet->rangeToArray('A1:'.$sheet->getHighestDataColumn().'1', null, true, false)[0] ?? [],
+            );
+
+            if ($this->findColumn($headers, 'grupo') === null) {
+                continue;
+            }
+
+            if (
+                $this->findColumn($headers, 'historico') !== null
+                || $this->findColumn($headers, 'tipo de despesa') !== null
+                || $this->findColumn($headers, 'vencimento') !== null
+            ) {
+                return $sheet;
+            }
+        }
+
+        return $spreadsheet->getActiveSheet();
+    }
+
+    /**
+     * @return list<list<mixed>>
+     */
+    private function extractRows(Worksheet $sheet): array
+    {
+        $highestColumn = $sheet->getHighestDataColumn();
+        $highestRow = min($sheet->getHighestDataRow(), 100000);
+        $rows = [];
+        $emptyStreak = 0;
+
+        for ($rowNumber = 1; $rowNumber <= $highestRow; $rowNumber++) {
+            $row = $sheet->rangeToArray("A{$rowNumber}:{$highestColumn}{$rowNumber}", null, true, false)[0] ?? [];
+
+            if ($this->isBlankRow($row)) {
+                $emptyStreak++;
+
+                if ($rows !== [] && $emptyStreak >= 25) {
+                    break;
+                }
+
+                continue;
+            }
+
+            $emptyStreak = 0;
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     */
+    private function isBlankRow(array $row): bool
+    {
+        foreach ($row as $cell) {
+            if ($cell !== null && trim((string) $cell) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<string>  $headers
+     * @return array{
+     *     dueDate: ?int,
+     *     description: ?int,
+     *     descriptionDetail: ?int,
+     *     value: ?int,
+     *     forecast: ?int,
+     *     realized: ?int,
+     *     category: ?int,
+     *     subcategory: ?int,
+     *     flag: ?int,
+     *     paidDate: ?int,
+     *     status: ?int,
+     *     prevReal: ?int,
+     *     observation: ?int
+     * }
+     */
+    private function mapColumns(array $headers): array
+    {
+        return [
+            'dueDate' => $this->findColumn($headers, 'vencimento') ?? $this->findColumn($headers, 'data'),
+            'description' => $this->findColumn($headers, 'historico') ?? $this->findColumn($headers, 'tipo de despesa'),
+            'descriptionDetail' => $this->findColumn($headers, 'tipo de despesa 2'),
+            'value' => $this->findColumn($headers, 'debito') ?? $this->findColumn($headers, 'valor'),
+            'forecast' => $this->findColumn($headers, 'previsto'),
+            'realized' => $this->findColumn($headers, 'realizado'),
+            'category' => $this->findColumn($headers, 'grupo'),
+            'subcategory' => $this->findColumn($headers, 'tipo de despesa') ?? $this->findColumn($headers, 'tipo'),
+            'flag' => $this->findColumn($headers, 'considerar'),
+            'paidDate' => $this->findColumn($headers, 'pgto'),
+            'status' => $this->findColumn($headers, 'status'),
+            'prevReal' => $this->findColumn($headers, 'prev / real') ?? $this->findColumn($headers, 'prev'),
+            'observation' => $this->findColumn($headers, 'observacao'),
+        ];
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     * @param  array<string, int|null>  $columns
+     */
+    private function resolveDescription(array $row, array $columns): string
+    {
+        $detail = $columns['descriptionDetail'] !== null
+            ? trim((string) ($row[$columns['descriptionDetail']] ?? ''))
+            : '';
+
+        if ($detail !== '') {
+            return $detail;
+        }
+
+        if ($columns['description'] !== null) {
+            return trim((string) ($row[$columns['description']] ?? ''));
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     * @param  array<string, int|null>  $columns
+     */
+    private function resolveAmount(array $row, array $columns, bool $paid): ?float
+    {
+        $realized = $columns['realized'] !== null ? $this->parseMoney($row[$columns['realized']] ?? null) : null;
+        $forecast = $columns['forecast'] !== null ? $this->parseMoney($row[$columns['forecast']] ?? null) : null;
+        $legacy = $columns['value'] !== null ? $this->parseMoney($row[$columns['value']] ?? null) : null;
+
+        $preferred = $paid
+            ? $this->firstPositive($realized, $forecast, $legacy)
+            : $this->firstPositive($forecast, $realized, $legacy);
+
+        return $preferred !== null ? round($preferred, 2) : null;
+    }
+
+    private function firstPositive(?float ...$values): ?float
+    {
+        foreach ($values as $value) {
+            if ($value !== null && abs($value) > 0) {
+                return abs($value);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     * @param  array<string, int|null>  $columns
+     */
+    private function isPaid(array $row, array $columns): bool
+    {
+        if ($columns['status'] !== null) {
+            $status = $this->normalize($row[$columns['status']] ?? null);
+
+            if (in_array($status, self::PAID_STATUSES, true)) {
+                return true;
+            }
+
+            if (in_array($status, self::OPEN_STATUSES, true) || $status !== '') {
+                return false;
+            }
+        }
+
+        if ($columns['prevReal'] !== null) {
+            $prevReal = $this->normalize($row[$columns['prevReal']] ?? null);
+
+            if (in_array($prevReal, ['realizado', 'real', 'pago'], true)) {
+                return true;
+            }
+
+            if (in_array($prevReal, ['previsto', 'prev'], true)) {
+                return false;
+            }
+        }
+
+        if ($columns['paidDate'] !== null) {
+            return $this->parseDate($row[$columns['paidDate']] ?? null) !== null;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     * @param  array<string, int|null>  $columns
+     */
+    private function resolvePaidDate(array $row, array $columns, string $dueDate): string
+    {
+        if ($columns['paidDate'] !== null) {
+            $paidDate = $this->parseDate($row[$columns['paidDate']] ?? null);
+
+            if ($paidDate !== null) {
+                return $paidDate;
+            }
+        }
+
+        return $dueDate;
+    }
+
+    /**
+     * @param  list<mixed>  $row
+     */
+    private function shouldImport(array $row, ?int $flagColumn): bool
+    {
+        if ($flagColumn === null) {
+            return true;
+        }
+
+        $flag = $this->normalize($row[$flagColumn] ?? null);
+
+        return $flag === '' || in_array($flag, ['sim', 's', 'x', 'yes', '1'], true);
     }
 
     /**
@@ -142,9 +401,9 @@ class AccountImportService
         }
 
         $category = Category::query()
-            ->where('name', $name)
             ->whereNull('parent_id')
             ->where('type', CategoryType::Expense->value)
+            ->whereRaw('LOWER(name) = ?', [$key])
             ->first();
 
         if ($category === null) {
@@ -176,8 +435,8 @@ class AccountImportService
         }
 
         $subcategory = Category::query()
-            ->where('name', $name)
             ->where('parent_id', $category->uuid)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
             ->first();
 
         if ($subcategory === null) {
@@ -213,17 +472,32 @@ class AccountImportService
     }
 
     /**
+     * Prefere correspondência exata; senão, o cabeçalho mais curto que contém o termo
+     * (ex.: "tipo de despesa" ganha de "tipo de despesa 2").
+     *
      * @param  list<string>  $headers
      */
     private function findColumn(array $headers, string $needle): ?int
     {
+        $best = null;
+        $bestLength = PHP_INT_MAX;
+
         foreach ($headers as $index => $header) {
-            if ($header !== '' && str_contains($header, $needle)) {
+            if ($header === '') {
+                continue;
+            }
+
+            if ($header === $needle) {
                 return $index;
+            }
+
+            if (str_contains($header, $needle) && strlen($header) < $bestLength) {
+                $best = $index;
+                $bestLength = strlen($header);
             }
         }
 
-        return null;
+        return $best;
     }
 
     private function parseMoney(mixed $value): ?float
@@ -242,7 +516,6 @@ class AccountImportService
             return null;
         }
 
-        // 1.234,56 → remove os pontos de milhar e converte a vírgula decimal
         if (str_contains($s, ',') && str_contains($s, '.')) {
             $s = str_replace('.', '', $s);
         }
@@ -272,7 +545,6 @@ class AccountImportService
 
         $s = trim((string) $value);
 
-        // dd/mm/aaaa ou dd/mm/aa (também com - ou .)
         if (preg_match('/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/', $s, $m)) {
             $day = (int) $m[1];
             $month = (int) $m[2];
@@ -287,7 +559,6 @@ class AccountImportService
             }
         }
 
-        // aaaa-mm-dd
         if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m) && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
             return sprintf('%04d-%02d-%02d', (int) $m[1], (int) $m[2], (int) $m[3]);
         }

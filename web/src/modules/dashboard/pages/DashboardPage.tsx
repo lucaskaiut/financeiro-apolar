@@ -167,14 +167,16 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const user = useSessionStore((state) => state.user)
-  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
 
-  const { data, isPending } = useDashboardSummary(bankAccountId || undefined)
+  const { data, isPending } = useDashboardSummary(costCenterId || undefined)
 
   const filterOptions = [
     { value: '', label: 'Todos' },
-    ...(data?.bank_accounts.map((cc) => ({ value: cc.id, label: cc.name })) ?? []),
+    ...(data?.cost_centers.map((cc) => ({ value: cc.id, label: cc.name })) ?? []),
   ]
+
+  const accountsQuery = costCenterId ? `&cost_center_id=${costCenterId}` : ''
 
   return (
     <Page>
@@ -184,7 +186,7 @@ export default function DashboardPage() {
       />
 
       <PageContent>
-        <SegmentedControl value={bankAccountId} options={filterOptions} onChange={setBankAccountId} />
+        <SegmentedControl value={costCenterId} options={filterOptions} onChange={setCostCenterId} />
 
         {isPending && <DashboardSkeleton />}
 
@@ -202,7 +204,7 @@ export default function DashboardPage() {
         )}
 
         {data && (
-          <div key={bankAccountId || 'all'} className="flex flex-col gap-5">
+          <div key={costCenterId || 'all'} className="flex flex-col gap-5">
             <KpiGrid kpis={data.kpis} />
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -256,7 +258,7 @@ export default function DashboardPage() {
                       <AlertTriangle className="size-4 text-danger" />
                       Lançamentos vencidos
                     </h2>
-                    <ButtonLink to="/accounts?overdue=1&type=payable" variant="ghost" size="sm">
+                    <ButtonLink to={`/accounts?overdue=1&type=payable${accountsQuery}`} variant="ghost" size="sm">
                       Ver todos
                     </ButtonLink>
                   </div>
@@ -279,7 +281,7 @@ export default function DashboardPage() {
                       <CalendarClock className="size-4 text-primary" />
                       Próximos vencimentos
                     </h2>
-                    <ButtonLink to="/accounts" variant="ghost" size="sm">
+                    <ButtonLink to={`/accounts${costCenterId ? `?cost_center_id=${costCenterId}` : ''}`} variant="ghost" size="sm">
                       Ver todos
                     </ButtonLink>
                   </div>
