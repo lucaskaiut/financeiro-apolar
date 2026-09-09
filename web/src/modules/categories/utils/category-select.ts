@@ -1,10 +1,29 @@
 import type { SearchSelectOption } from '@/shared/design-system'
 import { categoriesService } from '../services/categories.service'
 
-function mapCategoryOption(category: { id: string; name: string; parent_id?: string | null; type?: string }): SearchSelectOption {
+type CategoryOptionSource = {
+  id: string
+  name: string
+  parent_id?: string | null
+  parent_name?: string | null
+  type?: string
+}
+
+export function formatCategoryLabel(category: Pick<CategoryOptionSource, 'name' | 'parent_id' | 'parent_name'>): string {
+  if (category.parent_id && category.parent_name) {
+    return `${category.parent_name} > ${category.name}`
+  }
+
+  return category.name
+}
+
+function mapCategoryOption(
+  category: CategoryOptionSource,
+  options?: { includeParent?: boolean },
+): SearchSelectOption {
   return {
     value: category.id,
-    label: category.name,
+    label: options?.includeParent ? formatCategoryLabel(category) : category.name,
     parent_id: category.parent_id,
     type: category.type,
   }
@@ -14,7 +33,7 @@ export async function resolveCategoryLabel(id: string): Promise<SearchSelectOpti
   try {
     const category = await categoriesService.get(id)
 
-    return mapCategoryOption(category)
+    return mapCategoryOption(category, { includeParent: true })
   } catch {
     return null
   }
@@ -69,5 +88,5 @@ export async function loadAllCategories(
     per_page: 20,
   })
 
-  return result.data.map(mapCategoryOption)
+  return result.data.map((category) => mapCategoryOption(category, { includeParent: true }))
 }
