@@ -1048,8 +1048,74 @@ OFX;
         $this->getJson('/api/reports/by-category')->assertOk();
         $this->getJson('/api/reports/monthly-summary')->assertOk();
         $this->getJson('/api/reports/by-cost-center')->assertOk();
+        $this->getJson('/api/reports/by-bank-account')->assertOk();
         $this->getJson('/api/reports/cash-flow')->assertOk();
         $this->getJson('/api/reports/payables')->assertOk();
+    }
+
+    public function test_monthly_summary_groups_expenses_by_cost_center(): void
+    {
+        Carbon::setTestNow('2026-03-15');
+
+        try {
+            $tenant = $this->createTenantWithRoles();
+            Sanctum::actingAs($this->createAdmin($tenant));
+
+            $bankAccountId = $this->createBankAccount();
+            $categoryId = $this->createCategory('expense');
+            $obraA = $this->createCostCenter('Obra A');
+            $obraB = $this->createCostCenter('Obra B');
+
+            $accountA = $this->postJson('/api/accounts', [
+                'type' => 'payable',
+                'description' => 'Despesa obra A',
+                'bank_account_id' => $bankAccountId,
+                'cost_center_id' => $obraA,
+                'category_id' => $categoryId,
+                'value' => 100,
+                'due_date' => '2026-03-01',
+                'purchase_date' => '2026-03-01',
+            ])->assertCreated()->json('data.0.id');
+
+            $accountB = $this->postJson('/api/accounts', [
+                'type' => 'payable',
+                'description' => 'Despesa obra B',
+                'bank_account_id' => $bankAccountId,
+                'cost_center_id' => $obraB,
+                'category_id' => $categoryId,
+                'value' => 250,
+                'due_date' => '2026-03-01',
+                'purchase_date' => '2026-03-01',
+            ])->assertCreated()->json('data.0.id');
+
+            $this->postJson("/api/accounts/{$accountA}/settle", [
+                'value' => 100,
+                'settled_at' => '2026-03-10',
+            ])->assertOk();
+
+            $this->postJson("/api/accounts/{$accountB}/settle", [
+                'value' => 250,
+                'settled_at' => '2026-03-12',
+            ])->assertOk();
+
+            $summary = $this->getJson('/api/reports/monthly-summary?from=2026-03-01&to=2026-03-31')
+                ->assertOk()
+                ->json('data');
+
+            $rows = collect($summary['rows']);
+
+            $this->assertEqualsWithDelta(350, $summary['grand_total']['total'], 0.01);
+            $this->assertEqualsWithDelta(100, $rows->firstWhere('bank_account', 'Obra A')['total'], 0.01);
+            $this->assertEqualsWithDelta(250, $rows->firstWhere('bank_account', 'Obra B')['total'], 0.01);
+            $this->assertNull($rows->firstWhere('bank_account', 'Banco Principal'));
+
+            $this->getJson('/api/reports/by-bank-account')
+                ->assertOk()
+                ->assertJsonPath('data.rows.0.bank_account', 'Banco Principal')
+                ->assertJsonPath('data.rows.0.expense', 350);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_account_documents_upload_list_preview_and_delete(): void
@@ -1607,6 +1673,12 @@ OFX;
             $this->assertEqualsWithDelta(150, $expense['Categoria X']['total'], 0.01);
             $this->assertEqualsWithDelta(100, $expense['Categoria Y']['total'], 0.01);
             $this->assertEqualsWithDelta(80, $expense['Categoria Z']['total'], 0.01);
+
+            $byObraA = $this->getJson("/api/reports/by-category?from=2026-09-01&to=2026-09-30&cost_center_id={$obraA}")->assertOk()->json('data');
+            $expenseObraA = collect($byObraA['expense'])->keyBy('category');
+            $this->assertEqualsWithDelta(150, $expenseObraA['Categoria X']['total'], 0.01);
+            $this->assertFalse($expenseObraA->has('Categoria Y'));
+            $this->assertFalse($expenseObraA->has('Categoria Z'));
 
             $cashFlow = $this->getJson('/api/cash-flow/realized?from=2026-09-01&to=2026-09-30')->assertOk()->json('data');
             $this->assertEqualsWithDelta(330, $cashFlow['total_out'], 0.01);

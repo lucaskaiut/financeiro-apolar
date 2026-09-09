@@ -136,6 +136,8 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::get('reports/monthly-summary/export', [ReportController::class, 'monthlySummaryExport'])->middleware('permission:reports.export');
     Route::get('reports/by-cost-center', [ReportController::class, 'byCostCenter'])->middleware('permission:reports.view');
     Route::get('reports/by-cost-center/export', [ReportController::class, 'byCostCenterExport'])->middleware('permission:reports.export');
+    Route::get('reports/by-bank-account', [ReportController::class, 'byCostCenter'])->middleware('permission:reports.view');
+    Route::get('reports/by-bank-account/export', [ReportController::class, 'byCostCenterExport'])->middleware('permission:reports.export');
     Route::get('reports/cash-flow', [ReportController::class, 'cashFlow'])->middleware('permission:reports.view');
     Route::get('reports/cash-flow/export', [ReportController::class, 'cashFlowExport'])->middleware('permission:reports.export');
     Route::get('reports/payables', [ReportController::class, 'payables'])->middleware('permission:reports.view');

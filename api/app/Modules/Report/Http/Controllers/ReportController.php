@@ -16,6 +16,7 @@ class ReportController extends ApiController
         return $this->success($this->service->daily(
             $request->string('date')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -25,6 +26,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -35,6 +37,7 @@ class ReportController extends ApiController
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -43,6 +46,7 @@ class ReportController extends ApiController
         return $this->service->dailyExport(
             $request->string('date')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -52,6 +56,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -62,6 +67,7 @@ class ReportController extends ApiController
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -71,6 +77,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -87,6 +94,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -96,6 +104,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -105,6 +114,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -122,6 +132,7 @@ class ReportController extends ApiController
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -134,6 +145,7 @@ class ReportController extends ApiController
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
             $selectedIds,
+            $request->string('cost_center_id')->toString() ?: null,
         );
     }
 
@@ -144,6 +156,7 @@ class ReportController extends ApiController
             $request->string('to')->toString() ?: null,
             (int) $request->integer('days', 30),
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 
@@ -153,6 +166,7 @@ class ReportController extends ApiController
             $request->string('from')->toString() ?: null,
             $request->string('to')->toString() ?: null,
             $request->string('bank_account_id')->toString() ?: null,
+            $request->string('cost_center_id')->toString() ?: null,
         ));
     }
 }

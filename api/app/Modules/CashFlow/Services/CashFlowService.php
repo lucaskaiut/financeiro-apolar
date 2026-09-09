@@ -15,14 +15,14 @@ class CashFlowService
     /**
      * @return array<string, mixed>
      */
-    public function realized(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $categoryId = null): array
+    public function realized(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $categoryId = null, ?string $costCenterId = null): array
     {
         $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
         $toDate = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
 
         $openingBalance = round(
-            $this->initialBalance($bankAccountId)
-            + $this->netSettled($fromDate->copy()->subSecond(), $bankAccountId, $categoryId),
+            ($costCenterId ? 0.0 : $this->initialBalance($bankAccountId))
+            + $this->netSettled($fromDate->copy()->subSecond(), $bankAccountId, $categoryId, $costCenterId),
             2,
         );
 
@@ -32,6 +32,7 @@ class CashFlowService
             ->whereDate('settled_at', '>=', $fromDate->toDateString())
             ->whereDate('settled_at', '<=', $toDate->toDateString())
             ->forBankAccount($bankAccountId)
+            ->forCostCenter($costCenterId)
             ->forCategory($categoryId)
             ->orderBy('settled_at')
             ->get();
@@ -50,10 +51,11 @@ class CashFlowService
             $isIn = $account->type === AccountType::Receivable;
             $slices = ClassificationSlices::forAmount($account, (float) $settlement->value);
 
-            if ($categoryId) {
+            if ($categoryId || $costCenterId) {
                 $slices = array_values(array_filter(
                     $slices,
-                    fn (array $slice) => $slice['category_id'] === $categoryId,
+                    fn (array $slice) => ($categoryId === null || $slice['category_id'] === $categoryId)
+                        && ($costCenterId === null || $slice['cost_center_id'] === $costCenterId),
                 ));
                 $value = round(array_sum(array_column($slices, 'value')), 2);
 

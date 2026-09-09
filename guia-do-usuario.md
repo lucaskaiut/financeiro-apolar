@@ -650,10 +650,10 @@ Todos os relatórios podem ser vistos na tela. Com permissão de exportação, t
 | Aba | O que mostra |
 |-----|----------------|
 | **Diário** | Pagamentos e recebimentos de um dia, com saldo do dia, agrupados por centro de custo |
-| **Semanal** | Totais pagos e recebidos no período, saldo líquido |
+| **Semanal** | Totais pagos e recebidos no período, agrupados por centro de custo |
 | **Provisão** | Contas futuras ainda em aberto (matriz de compromissos) |
 | **Por categoria** | Despesas liquidadas por categoria e centro de custo |
-| **Resumo mensal** | Consolidado do mês |
+| **Resumo mensal** | Despesas liquidadas por centro de custo e mês |
 | **Por conta bancária** | Saldo inicial, entradas, saídas e saldo de cada conta |
 | **Demonstrativo** | Realizado versus projetado, com horizontes de 30, 60 ou 90 dias |
 | **Contas a pagar** | Relatório específico de payables, inclusive atrasos |

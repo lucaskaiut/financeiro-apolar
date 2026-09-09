@@ -16,8 +16,8 @@ import {
   type Column,
 } from '@/shared/design-system'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
-import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useCategoryOptions } from '@/modules/categories/hooks/useCategories'
+import { CostCenterFilter } from '@/modules/reports/components/CostCenterFilter'
 import { useRealizedCashFlow } from '../hooks/useCashFlow'
 import type { RealizedEntry } from '../services/cash-flow.service'
 
@@ -27,16 +27,15 @@ const firstOfMonth = toLocalIsoDate(new Date(new Date().getFullYear(), new Date(
 export default function CashFlowRealizedPage() {
   const [from, setFrom] = useState(firstOfMonth)
   const [to, setTo] = useState(today)
-  const [bankAccountId, setCostCenterId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
-  const bankAccounts = useBankAccountOptions()
   const categories = useCategoryOptions()
 
   const query = useRealizedCashFlow({
     from,
     to,
-    ...(bankAccountId ? { bank_account_id: bankAccountId } : {}),
+    ...(costCenterId ? { cost_center_id: costCenterId } : {}),
     ...(categoryId ? { category_id: categoryId } : {}),
   })
 
@@ -93,20 +92,14 @@ export default function CashFlowRealizedPage() {
               }}
             />
             <div className="flex flex-wrap items-center gap-2">
-            <Select
-              aria-label="Conta bancária"
-              className="w-52"
-              value={bankAccountId}
-              onChange={(e) => setCostCenterId(e.target.value)}
-              options={[{ value: '', label: 'Todos os centros' }, ...(bankAccounts.data ?? [])]}
-            />
-            <Select
-              aria-label="Categoria"
-              className="w-52"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              options={[{ value: '', label: 'Todas as categorias' }, ...(categories.data ?? [])]}
-            />
+              <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
+              <Select
+                aria-label="Categoria"
+                className="w-52"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                options={[{ value: '', label: 'Todas as categorias' }, ...(categories.data ?? [])]}
+              />
             </div>
           </div>
         </FilterBar>

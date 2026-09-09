@@ -5,6 +5,8 @@ import { CategoryMatrixViewer, CategoryViewButton } from '../components/Category
 import { MonthlySummaryTable } from '../components/MonthlySummaryTable'
 import { MonthlySummaryViewer, MonthlySummaryViewButton } from '../components/MonthlySummaryViewer'
 import { BankAccountFilter, useBankAccountLabel } from '../components/BankAccountFilter'
+import { useCostCenterLabel } from '../components/CostCenterFilter'
+import { buildReportScopeSubtitle, ReportScopeFilters } from '../components/ReportScopeFilters'
 import { ReportExportButtons } from '../components/ReportExportButtons'
 import { ReportGroupHeader } from '../components/ReportGroupHeader'
 import { ProvisionMatrixTable } from '../components/ProvisionMatrixTable'
@@ -117,11 +119,16 @@ export default function ReportsPage() {
 
 function DailySection() {
   const [date, setDate] = useState(today)
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'value', direction: 'desc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
-  const query = useDailyReport({ date, bank_account_id: costCenterId || undefined })
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
+  const query = useDailyReport({
+    date,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
+  })
 
   type MovementRow = NonNullable<typeof query.data>['payments'][number]
 
@@ -183,7 +190,7 @@ function DailySection() {
     items.map((item) => [item.description, item.category ?? '—', formatCurrency(item.value)])
   const movementXlsxRows = (items: MovementRow[]) =>
     items.map((item) => [item.description, item.category ?? '—', item.value])
-  const subtitle = `Data: ${formatDate(date)} · ${costCenterLabel}`
+  const subtitle = buildReportScopeSubtitle([`Data: ${formatDate(date)}`, scopeLabel])
 
   const dailyScreenSections = dailyGroups.flatMap((group) => {
     const sections = []
@@ -303,7 +310,12 @@ function DailySection() {
             to={date}
             onChange={({ to }) => setDate(to)}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -356,7 +368,7 @@ function DailySection() {
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
         title="Relatório diário"
-        description={`Data: ${formatDate(date)} · ${costCenterLabel}`}
+        description={subtitle}
         columns={movementColumns}
         sections={dailyScreenSections}
         summary={[
@@ -373,11 +385,17 @@ function DailySection() {
 function WeeklySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'total_paid', direction: 'desc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
-  const query = useWeeklyReport({ from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined })
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
+  const query = useWeeklyReport({
+    from: from || undefined,
+    to: to || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
+  })
 
   type WeeklyGroupRow = WeeklyBankAccountGroup
 
@@ -394,7 +412,7 @@ function WeeklySection() {
   const filteredBalance = weeklyGroups.reduce((sum, group) => sum + group.net_balance, 0)
 
   const weeklyColumns: ScreenReportColumn<WeeklyGroupRow>[] = [
-    { key: 'bank_account', header: 'Conta bancária', cell: (row) => row.bank_account },
+    { key: 'bank_account', header: 'Centro de custo', cell: (row) => row.bank_account },
     { key: 'total_paid', header: 'Total pago', align: 'right', cell: (row) => formatCurrency(row.total_paid) },
     { key: 'total_received', header: 'Total recebido', align: 'right', cell: (row) => formatCurrency(row.total_received) },
     { key: 'net_balance', header: 'Saldo líquido', align: 'right', cell: (row) => formatCurrency(row.net_balance) },
@@ -407,7 +425,7 @@ function WeeklySection() {
         ? `${formatDate(from)} até ${formatDate(to)}`
         : 'Período não definido'
 
-  const subtitle = `Período: ${periodLabel} · ${costCenterLabel}`
+  const subtitle = buildReportScopeSubtitle([`Período: ${periodLabel}`, scopeLabel])
 
   const exportWeeklyXlsx = () => {
     downloadReportXlsx({
@@ -416,7 +434,7 @@ function WeeklySection() {
       subtitleLines: [subtitle],
       tables: [
         {
-          headers: ['Conta bancária', 'Total pago', 'Total recebido', 'Saldo líquido'],
+          headers: ['Centro de custo', 'Total pago', 'Total recebido', 'Saldo líquido'],
           rows: weeklyGroups.map((group) => [
             group.bank_account,
             group.total_paid,
@@ -445,7 +463,12 @@ function WeeklySection() {
               setTo(nextTo)
             }}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -492,7 +515,7 @@ function WeeklySection() {
             columns={[
               {
                 key: 'bank_account',
-                header: renderColumnHeader('bank_account', 'Conta bancária', { placeholder: 'Filtrar…' }),
+                header: renderColumnHeader('bank_account', 'Centro de custo', { placeholder: 'Filtrar…' }),
                 render: (row) => <span className="font-medium text-foreground">{row.bank_account}</span>,
               },
               {
@@ -547,20 +570,27 @@ function WeeklySection() {
 function ProvisionSection() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(defaultProvisionTo)
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
-  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
   const query = useProvisionReport({
     from: from || undefined,
     to: to || undefined,
-    bank_account_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
   })
 
   const data = query.data
-  const exportParams = { from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined }
+  const exportParams = {
+    from: from || undefined,
+    to: to || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
+  }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
-  const subtitle = `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)} · ${costCenterLabel}`
+  const subtitle = buildReportScopeSubtitle([`Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`, scopeLabel])
 
   const exportProvisionPdf = () => {
     if (!data) return
@@ -583,7 +613,12 @@ function ProvisionSection() {
               setTo(nextTo)
             }}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -615,7 +650,7 @@ function ProvisionSection() {
           open={viewerOpen}
           onClose={() => setViewerOpen(false)}
           data={data}
-          costCenterLabel={costCenterLabel}
+          costCenterLabel={scopeLabel}
         />
       )}
     </Card>
@@ -625,14 +660,16 @@ function ProvisionSection() {
 function CategorySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'total', direction: 'desc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
   const query = useCategoryReport({
     from: from || undefined,
     to: to || undefined,
-    bank_account_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
   })
 
   type CategoryRow = { category: string; total: number }
@@ -677,7 +714,7 @@ function CategorySection() {
   const matrix = query.data?.matrix
   const filteredMatrix = matrix ? applyColumnFiltersToCategoryMatrix(matrix, columnState) : null
   const hasFilteredData = categoryGroups.length > 0 || (filteredMatrix?.groups.length ?? 0) > 0
-  const subtitle = `Período: ${periodLabel} · ${costCenterLabel}`
+  const subtitle = buildReportScopeSubtitle([`Período: ${periodLabel}`, scopeLabel])
 
   const exportCategoryPdf = () => {
     if (filteredMatrix && filteredMatrix.groups.length > 0) {
@@ -774,7 +811,12 @@ function CategorySection() {
               setTo(nextTo)
             }}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -817,7 +859,7 @@ function CategorySection() {
           matrix={filteredMatrix}
           from={query.data.from}
           to={query.data.to}
-          costCenterLabel={costCenterLabel}
+          costCenterLabel={scopeLabel}
         />
       )}
     </Card>
@@ -827,26 +869,33 @@ function CategorySection() {
 function MonthlySummarySection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
-  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
   const query = useMonthlySummaryReport({
     from: from || undefined,
     to: to || undefined,
-    bank_account_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
   })
 
   const data = query.data
-  const exportParams = { from: from || undefined, to: to || undefined, bank_account_id: costCenterId || undefined }
+  const exportParams = {
+    from: from || undefined,
+    to: to || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
+  }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
-  const subtitle = `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)} · ${costCenterLabel}`
+  const subtitle = buildReportScopeSubtitle([`Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`, scopeLabel])
   const hasData = (data?.rows.length ?? 0) > 0
 
   const exportMonthlySummaryPdf = () => {
     if (!data) return
 
-    printHtmlReport('Resumo mensal', buildMonthlySummaryHtml(data, 'Resumo mensal por conta bancária', subtitle))
+    printHtmlReport('Resumo mensal', buildMonthlySummaryHtml(data, 'Resumo mensal por centro de custo', subtitle))
   }
 
   return (
@@ -861,7 +910,12 @@ function MonthlySummarySection() {
               setTo(nextTo)
             }}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -896,7 +950,7 @@ function MonthlySummarySection() {
           open={viewerOpen}
           onClose={() => setViewerOpen(false)}
           data={data}
-          costCenterLabel={costCenterLabel}
+          costCenterLabel={scopeLabel}
         />
       )}
     </Card>
@@ -904,11 +958,11 @@ function MonthlySummarySection() {
 }
 
 function BankAccountSection() {
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'expense', direction: 'desc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
-  const query = useBankAccountReport({ bank_account_id: costCenterId || undefined })
+  const scopeLabel = useBankAccountLabel(bankAccountId)
+  const query = useBankAccountReport({ bank_account_id: bankAccountId || undefined })
 
   const accessors = {
     bank_account: (row: BankAccountReportRow) => row.bank_account,
@@ -970,9 +1024,9 @@ function BankAccountSection() {
 
   const exportBankAccountXlsx = () => {
     downloadReportXlsx({
-      filename: 'relatorio-por-centro-de-custo.xlsx',
+      filename: 'relatorio-por-conta-bancaria.xlsx',
       title: 'Relatório por conta bancária',
-      subtitleLines: [costCenterLabel],
+      subtitleLines: [scopeLabel],
       tables: [
         {
           headers: costCenterHeaders,
@@ -999,7 +1053,7 @@ function BankAccountSection() {
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
-            <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+            <BankAccountFilter value={bankAccountId} onChange={setBankAccountId} />
           </div>
           {!query.isPending && (
             <div className="flex flex-wrap justify-end gap-2">
@@ -1012,7 +1066,7 @@ function BankAccountSection() {
                     'Relatório por conta bancária',
                     buildReportHtml({
                       title: 'Relatório por conta bancária',
-                      subtitle: costCenterLabel,
+                      subtitle: scopeLabel,
                       sections: [
                         {
                           headers: costCenterHeaders,
@@ -1054,12 +1108,12 @@ function BankAccountSection() {
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
         title="Relatório por conta bancária"
-        description={costCenterLabel}
+        description={scopeLabel}
         columns={screenColumns}
         sections={rows.map((row) => ({
           title: row.bank_account,
           rows: [row],
-          footer: { label: 'Saldo do centro', value: formatCurrency(row.balance) },
+          footer: { label: 'Saldo da conta', value: formatCurrency(row.balance) },
         }))}
         summary={[
           { label: 'Saldo inicial total', value: formatCurrency(grandTotals.initial) },
@@ -1077,16 +1131,18 @@ function CashFlowSection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [days, setDays] = useState(30)
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'realized_net', direction: 'desc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
 
   const query = useCashFlowStatement({
     from: from || undefined,
     to: to || undefined,
     days,
-    bank_account_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
   })
 
   type CashFlowGroupRow = NonNullable<typeof query.data>['groups'][number]
@@ -1139,8 +1195,12 @@ function CashFlowSection() {
   ]
 
   const subtitle = query.data
-    ? `Período: ${formatDate(query.data.realized.from)} até ${formatDate(query.data.realized.to)} · Projeção ${days} dias · ${costCenterLabel}`
-    : costCenterLabel
+    ? buildReportScopeSubtitle([
+        `Período: ${formatDate(query.data.realized.from)} até ${formatDate(query.data.realized.to)}`,
+        `Projeção ${days} dias`,
+        scopeLabel,
+      ])
+    : scopeLabel
 
   const exportCashFlowXlsx = () => {
     downloadReportXlsx({
@@ -1189,7 +1249,12 @@ function CashFlowSection() {
               { value: '90', label: '90 dias' },
             ]}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
           {query.data && (
             <>
               <ReportViewButton onClick={() => setViewerOpen(true)} />
@@ -1272,16 +1337,18 @@ function CashFlowSection() {
 function PayablesSection() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [costCenterId, setBankAccountId] = useState('')
+  const [bankAccountId, setBankAccountId] = useState('')
+  const [costCenterId, setCostCenterId] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [viewerOpen, setViewerOpen] = useState(false)
   const { columnState, renderColumnHeader } = useColumnTableState({ key: 'due_date', direction: 'asc' })
-  const costCenterLabel = useBankAccountLabel(costCenterId)
+  const scopeLabel = buildReportScopeSubtitle([useBankAccountLabel(bankAccountId), useCostCenterLabel(costCenterId)])
 
   const query = usePayablesReport({
     from: from || undefined,
     to: to || undefined,
-    bank_account_id: costCenterId || undefined,
+    bank_account_id: bankAccountId || undefined,
+    cost_center_id: costCenterId || undefined,
   })
 
   const payableAccessors = {
@@ -1335,8 +1402,12 @@ function PayablesSection() {
   const totalAnalyzed = accounts.reduce((sum, account) => sum + account.remaining_amount, 0)
 
   const exportSubtitle = data
-    ? `Referência: ${formatShortDate(data.reference_date)} · Período: ${formatShortDate(data.from)} até ${formatShortDate(data.to)} · ${costCenterLabel}`
-    : costCenterLabel
+    ? buildReportScopeSubtitle([
+        `Referência: ${formatShortDate(data.reference_date)}`,
+        `Período: ${formatShortDate(data.from)} até ${formatShortDate(data.to)}`,
+        scopeLabel,
+      ])
+    : scopeLabel
 
   const exportViewData = filteredPayablesData ? buildPayablesExportReport(filteredPayablesData, selected) : null
 
@@ -1395,7 +1466,7 @@ function PayablesSection() {
         ...tables,
         {
           banner: `Resumo geral em ${referenceDate}`,
-          headers: ['Conta bancária', 'Pagos', 'Em atraso'],
+          headers: ['Centro de custo', 'Pagos', 'Em atraso'],
           rows: exportViewData.summary.paid_today.rows.map((row, index) => [
             row.bank_account,
             row.amount,
@@ -1489,7 +1560,12 @@ function PayablesSection() {
               setTo(nextTo)
             }}
           />
-          <BankAccountFilter value={costCenterId} onChange={setBankAccountId} />
+          <ReportScopeFilters
+            bankAccountId={bankAccountId}
+            costCenterId={costCenterId}
+            onBankAccountChange={setBankAccountId}
+            onCostCenterChange={setCostCenterId}
+          />
         </div>
 
         {query.isPending ? (
@@ -1555,7 +1631,7 @@ function PayablesSection() {
           open={viewerOpen}
           onClose={() => setViewerOpen(false)}
           data={exportViewData}
-          costCenterLabel={costCenterLabel}
+          costCenterLabel={scopeLabel}
         />
       )}
     </Card>

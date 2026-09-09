@@ -17,7 +17,7 @@ import {
 } from '@/shared/design-system'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
 import { addDays, toIsoDate } from '@/shared/utils/date'
-import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { CostCenterFilter } from '@/modules/reports/components/CostCenterFilter'
 import { useProjectedCashFlow } from '../hooks/useCashFlow'
 import type { ProjectedItem } from '../services/cash-flow.service'
 
@@ -27,14 +27,12 @@ const defaultTo = toIsoDate(addDays(new Date(), 30))
 export default function CashFlowProjectedPage() {
   const [from, setFrom] = useState(today)
   const [to, setTo] = useState(defaultTo)
-  const [bankAccountId, setCostCenterId] = useState('')
-
-  const bankAccounts = useBankAccountOptions()
+  const [costCenterId, setCostCenterId] = useState('')
 
   const query = useProjectedCashFlow({
     from,
     to,
-    ...(bankAccountId ? { bank_account_id: bankAccountId } : {}),
+    ...(costCenterId ? { cost_center_id: costCenterId } : {}),
   })
 
   const columns: Array<Column<ProjectedItem>> = [
@@ -88,13 +86,7 @@ export default function CashFlowProjectedPage() {
                 setTo(nextTo)
               }}
             />
-            <Select
-              aria-label="Conta bancária"
-              className="w-52"
-              value={bankAccountId}
-              onChange={(e) => setCostCenterId(e.target.value)}
-              options={[{ value: '', label: 'Todos os centros' }, ...(bankAccounts.data ?? [])]}
-            />
+            <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
           </div>
         </FilterBar>
 

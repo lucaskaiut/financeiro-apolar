@@ -249,6 +249,11 @@ export interface ProvisionReport {
   total_out: number
 }
 
+type ReportScopeParams = {
+  bank_account_id?: string
+  cost_center_id?: string
+}
+
 type ReportExportParams = Record<string, string | number | undefined>
 
 async function fetchExport(path: string, params: ReportExportParams, filename: string): Promise<void> {
@@ -261,48 +266,48 @@ async function fetchExport(path: string, params: ReportExportParams, filename: s
 }
 
 export const reportsService = {
-  async daily(params: { date?: string; bank_account_id?: string }): Promise<DailyReport> {
+  async daily(params: { date?: string } & ReportScopeParams): Promise<DailyReport> {
     const response = await http.get<ApiResponse<DailyReport>>('/reports/daily', { params })
     return response.data.data
   },
 
-  async dailyExport(params: { date?: string; bank_account_id?: string }): Promise<void> {
+  async dailyExport(params: { date?: string } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/daily/export', params, 'relatorio-diario.xlsx')
   },
 
-  async weekly(params: { from?: string; to?: string; bank_account_id?: string }): Promise<WeeklyReport> {
+  async weekly(params: { from?: string; to?: string } & ReportScopeParams): Promise<WeeklyReport> {
     const response = await http.get<ApiResponse<WeeklyReport>>('/reports/weekly', { params })
     return response.data.data
   },
 
-  async weeklyExport(params: { from?: string; to?: string; bank_account_id?: string }): Promise<void> {
+  async weeklyExport(params: { from?: string; to?: string } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/weekly/export', params, 'relatorio-semanal.xlsx')
   },
 
-  async provision(params: { from?: string; to?: string; days?: number; bank_account_id?: string }): Promise<ProvisionReport> {
+  async provision(params: { from?: string; to?: string; days?: number } & ReportScopeParams): Promise<ProvisionReport> {
     const response = await http.get<ApiResponse<ProvisionReport>>('/reports/provision', { params })
     return response.data.data
   },
 
-  async provisionExport(params: { from?: string; to?: string; days?: number; bank_account_id?: string }): Promise<void> {
+  async provisionExport(params: { from?: string; to?: string; days?: number } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/provision/export', params, 'relatorio-provisao.xlsx')
   },
 
-  async byCategory(params: { from?: string; to?: string; bank_account_id?: string }): Promise<CategoryReport> {
+  async byCategory(params: { from?: string; to?: string } & ReportScopeParams): Promise<CategoryReport> {
     const response = await http.get<ApiResponse<CategoryReport>>('/reports/by-category', { params })
     return response.data.data
   },
 
-  async byCategoryExport(params: { from?: string; to?: string; bank_account_id?: string }): Promise<void> {
+  async byCategoryExport(params: { from?: string; to?: string } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/by-category/export', params, 'relatorio-por-categoria.xlsx')
   },
 
-  async monthlySummary(params: { from?: string; to?: string; bank_account_id?: string }): Promise<MonthlySummaryReport> {
+  async monthlySummary(params: { from?: string; to?: string } & ReportScopeParams): Promise<MonthlySummaryReport> {
     const response = await http.get<ApiResponse<MonthlySummaryReport>>('/reports/monthly-summary', { params })
     return response.data.data
   },
 
-  async monthlySummaryExport(params: { from?: string; to?: string; bank_account_id?: string }): Promise<void> {
+  async monthlySummaryExport(params: { from?: string; to?: string } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/monthly-summary/export', params, 'relatorio-resumo-mensal.xlsx')
   },
 
@@ -312,19 +317,19 @@ export const reportsService = {
   },
 
   async byBankAccountExport(params?: { bank_account_id?: string }): Promise<void> {
-    await fetchExport('/reports/by-bank-account/export', params ?? {}, 'relatorio-por-centro-de-custo.xlsx')
+    await fetchExport('/reports/by-bank-account/export', params ?? {}, 'relatorio-por-conta-bancaria.xlsx')
   },
 
-  async cashFlow(params: { from?: string; to?: string; days?: number; bank_account_id?: string }): Promise<CashFlowStatement> {
+  async cashFlow(params: { from?: string; to?: string; days?: number } & ReportScopeParams): Promise<CashFlowStatement> {
     const response = await http.get<ApiResponse<CashFlowStatement>>('/reports/cash-flow', { params })
     return response.data.data
   },
 
-  async cashFlowExport(params: { from?: string; to?: string; days?: number; bank_account_id?: string }): Promise<void> {
+  async cashFlowExport(params: { from?: string; to?: string; days?: number } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/cash-flow/export', params, 'demonstrativo-fluxo-caixa.xlsx')
   },
 
-  async payables(params: { from?: string; to?: string; bank_account_id?: string }): Promise<PayablesReport> {
+  async payables(params: { from?: string; to?: string } & ReportScopeParams): Promise<PayablesReport> {
     const response = await http.get<ApiResponse<PayablesReport>>('/reports/payables', { params })
     return response.data.data
   },
@@ -332,9 +337,8 @@ export const reportsService = {
   async payablesExport(params: {
     from?: string
     to?: string
-    bank_account_id?: string
     selected_ids?: string
-  }): Promise<void> {
+  } & ReportScopeParams): Promise<void> {
     await fetchExport('/reports/payables/export', params, 'contas-a-pagar.xlsx')
   },
 }
