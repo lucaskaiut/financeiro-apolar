@@ -91,11 +91,7 @@ export default function CashFlowRealizedPage() {
             />
             <div className="flex flex-wrap items-center gap-2">
               <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
-              <CategoryFilterSelect
-                value={categoryId}
-                onChange={setCategoryId}
-                className="w-52"
-              />
+              <CategoryFilterSelect value={categoryId} onChange={setCategoryId} />
             </div>
           </div>
         </FilterBar>

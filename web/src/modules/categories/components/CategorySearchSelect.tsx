@@ -26,7 +26,7 @@ export function CategoryFilterSelect({
   value,
   onChange,
   type,
-  className,
+  className = 'w-96 min-w-96',
 }: {
   value: string
   onChange: (value: string) => void
@@ -46,6 +46,7 @@ export function CategoryFilterSelect({
       resolveLabel={resolveCategoryLabel}
       placeholder="Todas as categorias"
       emptyMessage="Nenhuma categoria encontrada"
+      wrapOptionLabels
       className={className}
     />
   )

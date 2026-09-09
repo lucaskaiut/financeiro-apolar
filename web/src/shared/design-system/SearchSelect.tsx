@@ -23,6 +23,7 @@ interface SearchSelectProps {
   emptyMessage?: string
   disabled?: boolean
   className?: string
+  wrapOptionLabels?: boolean
 }
 
 export function SearchSelect({
@@ -38,6 +39,7 @@ export function SearchSelect({
   emptyMessage = 'Nenhum resultado encontrado',
   disabled = false,
   className,
+  wrapOptionLabels = false,
 }: SearchSelectProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const loadOptionsRef = useRef(loadOptions)
@@ -247,7 +249,9 @@ export function SearchSelect({
                     index === highlight ? 'bg-surface-2' : 'text-foreground',
                   )}
                 >
-                  <span className="truncate">{option.label}</span>
+                  <span className={wrapOptionLabels ? 'min-w-0 whitespace-normal break-words' : 'truncate'}>
+                    {option.label}
+                  </span>
                   {option.value === value && <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />}
                 </button>
               </li>
