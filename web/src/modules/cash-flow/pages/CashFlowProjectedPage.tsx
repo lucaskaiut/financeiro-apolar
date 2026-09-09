@@ -11,7 +11,6 @@ import {
   Page,
   PageContent,
   PageHeader,
-  Select,
   Skeleton,
   type Column,
 } from '@/shared/design-system'
