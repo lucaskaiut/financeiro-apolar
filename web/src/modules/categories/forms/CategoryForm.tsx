@@ -1,4 +1,3 @@
-import { useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -8,15 +7,13 @@ import {
   CardContent,
   Form,
   RadioGroupField,
-  SearchSelectField,
   Section,
   SelectField,
   TextField,
-  type SearchSelectOption,
 } from '@/shared/design-system'
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
-import { categoriesService } from '../services/categories.service'
+import { CategoryParentSearchSelectField } from '../components/CategorySearchSelect'
 import { categorySchema, type CategoryFormValues } from '../schemas/category.schema'
 import type { CategoryPayload } from '../services/categories.service'
 
@@ -57,25 +54,6 @@ export function CategoryForm({ mode, defaultValues, submitting, onSubmit }: Cate
 
   const parentId = form.watch('parent_id')
 
-  const loadParentCategories = useCallback(async (search: string): Promise<SearchSelectOption[]> => {
-    const result = await categoriesService.list({
-      search: search || undefined,
-      parent: 'root',
-      per_page: 20,
-    })
-
-    return result.data.map((category) => ({ value: category.id, label: category.name, type: category.type }))
-  }, [])
-
-  const resolveParentLabel = useCallback(async (id: string): Promise<SearchSelectOption | null> => {
-    try {
-      const category = await categoriesService.get(id)
-      return { value: category.id, label: category.name }
-    } catch {
-      return null
-    }
-  }, [])
-
   const handleSubmit = async (values: CategoryFormValues) => {
     try {
       await onSubmit({
@@ -99,12 +77,9 @@ export function CategoryForm({ mode, defaultValues, submitting, onSubmit }: Cate
           <Section title="Dados da categoria">
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField name="name" label="Nome" placeholder="Ex.: Fornecedores" required className="sm:col-span-2" />
-              <SearchSelectField
+              <CategoryParentSearchSelectField
                 name="parent_id"
                 label="Categoria pai"
-                loadOptions={loadParentCategories}
-                resolveLabel={resolveParentLabel}
-                placeholder="Buscar categoria principal..."
                 hint="Selecione uma categoria pai para criar uma subcategoria."
                 onSelectOption={(option) => {
                   if (option.type) form.setValue('type', option.type as CategoryFormValues['type'])

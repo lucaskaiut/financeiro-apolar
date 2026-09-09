@@ -11,12 +11,11 @@ import {
   Page,
   PageContent,
   PageHeader,
-  Select,
   Skeleton,
   type Column,
 } from '@/shared/design-system'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
-import { useCategoryOptions } from '@/modules/categories/hooks/useCategories'
+import { CategoryFilterSelect } from '@/modules/categories/components/CategorySearchSelect'
 import { CostCenterFilter } from '@/modules/reports/components/CostCenterFilter'
 import { useRealizedCashFlow } from '../hooks/useCashFlow'
 import type { RealizedEntry } from '../services/cash-flow.service'
@@ -29,8 +28,6 @@ export default function CashFlowRealizedPage() {
   const [to, setTo] = useState(today)
   const [costCenterId, setCostCenterId] = useState('')
   const [categoryId, setCategoryId] = useState('')
-
-  const categories = useCategoryOptions()
 
   const query = useRealizedCashFlow({
     ...(from ? { from } : {}),
@@ -94,12 +91,10 @@ export default function CashFlowRealizedPage() {
             />
             <div className="flex flex-wrap items-center gap-2">
               <CostCenterFilter value={costCenterId} onChange={setCostCenterId} />
-              <Select
-                aria-label="Categoria"
-                className="w-52"
+              <CategoryFilterSelect
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                options={[{ value: '', label: 'Todas as categorias' }, ...(categories.data ?? [])]}
+                onChange={setCategoryId}
+                className="w-52"
               />
             </div>
           </div>

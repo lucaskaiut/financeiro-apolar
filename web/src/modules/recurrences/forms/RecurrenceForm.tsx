@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -8,16 +8,18 @@ import {
   CardContent,
   Form,
   RadioGroupField,
-  SearchSelectField,
   Section,
   SelectField,
   TextField,
   type SearchSelectOption,
 } from '@/shared/design-system'
+import {
+  CategorySearchSelectField,
+  SubcategorySearchSelectField,
+} from '@/modules/categories/components/CategorySearchSelect'
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
-import { categoriesService } from '@/modules/categories/services/categories.service'
 import { recurrenceSchema, type RecurrenceFormValues } from '../schemas/recurrence.schema'
 import type { RecurrencePayload } from '../services/recurrences.service'
 
@@ -67,46 +69,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
 
   const costCenters = useBankAccountOptions()
 
-  const loadCategories = useCallback(
-    async (search: string): Promise<SearchSelectOption[]> => {
-      const result = await categoriesService.list({
-        search: search || undefined,
-        type: categoryType,
-        parent: 'root',
-        per_page: 20,
-      })
-
-      return result.data.map((category) => ({ value: category.id, label: category.name }))
-    },
-    [categoryType],
-  )
-
-  const loadSubcategories = useCallback(
-    async (search: string): Promise<SearchSelectOption[]> => {
-      const result = await categoriesService.list({
-        search: search || undefined,
-        type: categoryType,
-        parent: form.getValues('category_id') || 'sub',
-        per_page: 20,
-      })
-
-      return result.data.map((category) => ({
-        value: category.id,
-        label: category.name,
-        parent_id: category.parent_id,
-      }))
-    },
-    [categoryType, form],
-  )
-
-  const resolveLabel = useCallback(async (id: string): Promise<SearchSelectOption | null> => {
-    try {
-      const category = await categoriesService.get(id)
-      return { value: category.id, label: category.name }
-    } catch {
-      return null
-    }
-  }, [])
+  const categoryId = form.watch('category_id')
 
   const handleSubmit = async (values: RecurrenceFormValues) => {
     try {
@@ -151,12 +114,10 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
               <TextField name="description" label="Descrição" required className="sm:col-span-2" />
               <TextField name="counterparty" label={type === 'receivable' ? 'Cliente' : 'Fornecedor'} className="sm:col-span-2" />
               <SelectField name="bank_account_id" label="Conta bancária" options={costCenters.data ?? []} placeholder="Selecione" required />
-              <SearchSelectField
+              <CategorySearchSelectField
                 name="category_id"
                 label="Categoria"
-                loadOptions={loadCategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar categoria..."
+                categoryType={categoryType}
                 required
                 onSelectOption={(option) => {
                   const subcategoryId = form.getValues('subcategory_id')
@@ -166,19 +127,13 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
                   }
                 }}
               />
-              <SearchSelectField
+              <SubcategorySearchSelectField
                 name="subcategory_id"
                 label="Subcategoria"
-                loadOptions={loadSubcategories}
-                resolveLabel={resolveLabel}
-                placeholder="Buscar subcategoria..."
-                onSelectOption={(option) => {
-                  setSelectedSubcategory(option)
-                  const categoryId = form.getValues('category_id')
-                  if (option.parent_id && option.parent_id !== categoryId) {
-                    form.setValue('category_id', option.parent_id)
-                  }
-                }}
+                categoryType={categoryType}
+                categoryId={categoryId}
+                onCategoryChange={(parentId) => form.setValue('category_id', parentId)}
+                onSelectOption={(option) => setSelectedSubcategory(option)}
               />
               <TextField name="value" label="Valor" type="number" step="0.01" min="0" required />
               <SelectField name="frequency" label="Frequência" options={FREQUENCY_OPTIONS} required />

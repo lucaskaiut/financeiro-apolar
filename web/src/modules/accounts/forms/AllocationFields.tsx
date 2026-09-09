@@ -1,15 +1,16 @@
-import { useCallback, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { Plus, Trash2 } from 'lucide-react'
 import {
   Button,
-  SearchSelectField,
   SelectField,
   TextField,
-  type SearchSelectOption,
 } from '@/shared/design-system'
+import {
+  CategorySearchSelectField,
+  SubcategorySearchSelectField,
+} from '@/modules/categories/components/CategorySearchSelect'
 import { formatCurrency } from '@/shared/utils/format'
-import { categoriesService } from '@/modules/categories/services/categories.service'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { emptyAllocationLine, type AccountFormValues } from '../schemas/account.schema'
 
@@ -38,29 +39,6 @@ export function AllocationFields({ categoryType }: { categoryType: 'income' | 'e
   const remaining = Math.round((value - allocated) * 100) / 100
   const formError = form.formState.errors.allocations?.message as string | undefined
 
-  const loadCategories = useCallback(
-    async (search: string): Promise<SearchSelectOption[]> => {
-      const result = await categoriesService.list({
-        search: search || undefined,
-        type: categoryType,
-        parent: 'root',
-        per_page: 20,
-      })
-
-      return result.data.map((category) => ({ value: category.id, label: category.name }))
-    },
-    [categoryType],
-  )
-
-  const resolveLabel = useCallback(async (id: string): Promise<SearchSelectOption | null> => {
-    try {
-      const category = await categoriesService.get(id)
-      return { value: category.id, label: category.name }
-    } catch {
-      return null
-    }
-  }, [])
-
   return (
     <div className="space-y-4">
       {fields.map((field, index) => (
@@ -69,8 +47,6 @@ export function AllocationFields({ categoryType }: { categoryType: 'income' | 'e
           index={index}
           categoryType={categoryType}
           costCenterOptions={costCenters.data ?? []}
-          loadCategories={loadCategories}
-          resolveLabel={resolveLabel}
           canRemove={fields.length > 2}
           onRemove={() => remove(index)}
         />
@@ -101,65 +77,36 @@ function AllocationRow({
   index,
   categoryType,
   costCenterOptions,
-  loadCategories,
-  resolveLabel,
   canRemove,
   onRemove,
 }: {
   index: number
   categoryType: 'income' | 'expense'
   costCenterOptions: Array<{ value: string; label: string }>
-  loadCategories: (search: string) => Promise<SearchSelectOption[]>
-  resolveLabel: (id: string) => Promise<SearchSelectOption | null>
   canRemove: boolean
   onRemove: () => void
 }) {
   const form = useFormContext<AccountFormValues>()
-  const categoryId = useWatch({ control: form.control, name: `allocations.${index}.category_id` })
-
-  const loadSubcategories = useCallback(
-    async (search: string): Promise<SearchSelectOption[]> => {
-      const result = await categoriesService.list({
-        search: search || undefined,
-        type: categoryType,
-        parent: categoryId || 'sub',
-        per_page: 20,
-      })
-
-      return result.data.map((category) => ({
-        value: category.id,
-        label: category.name,
-        parent_id: category.parent_id,
-      }))
-    },
-    [categoryId, categoryType],
-  )
+  const categoryId = useWatch({ control: form.control, name: `allocations.${index}.category_id` }) ?? ''
 
   return (
     <div className="rounded-xl border border-surface-3 p-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <SearchSelectField
+        <CategorySearchSelectField
           name={`allocations.${index}.category_id`}
           label="Categoria"
-          loadOptions={loadCategories}
-          resolveLabel={resolveLabel}
-          placeholder="Buscar categoria..."
+          categoryType={categoryType}
           required
           onSelectOption={() => {
             form.setValue(`allocations.${index}.subcategory_id`, '')
           }}
         />
-        <SearchSelectField
+        <SubcategorySearchSelectField
           name={`allocations.${index}.subcategory_id`}
           label="Subcategoria"
-          loadOptions={loadSubcategories}
-          resolveLabel={resolveLabel}
-          placeholder="Buscar subcategoria..."
-          onSelectOption={(option) => {
-            if (option.parent_id && option.parent_id !== categoryId) {
-              form.setValue(`allocations.${index}.category_id`, option.parent_id)
-            }
-          }}
+          categoryType={categoryType}
+          categoryId={categoryId}
+          onCategoryChange={(parentId) => form.setValue(`allocations.${index}.category_id`, parentId)}
         />
         <SelectField
           name={`allocations.${index}.cost_center_id`}

@@ -21,7 +21,7 @@ import {
 } from '@/shared/design-system'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
 import { toast } from '@/shared/stores/toast.store'
-import { categoriesService } from '@/modules/categories/services/categories.service'
+import { CategorySearchSelectField } from '@/modules/categories/components/CategorySearchSelect'
 import { costCentersService } from '@/modules/cost-centers/services/cost-centers.service'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import type { Account, BankTransaction } from '@/shared/types/models'
@@ -110,20 +110,6 @@ export function MatchDialog({
 
   const type = form.watch('type')
   const categoryType = type === 'receivable' ? 'income' : 'expense'
-
-  const loadCategories = useCallback(
-    async (searchTerm: string): Promise<SearchSelectOption[]> => {
-      const result = await categoriesService.list({
-        search: searchTerm || undefined,
-        type: categoryType,
-        parent: 'root',
-        per_page: 20,
-      })
-
-      return result.data.map((category) => ({ value: category.id, label: category.name }))
-    },
-    [categoryType],
-  )
 
   const loadCostCenters = useCallback(async (searchTerm: string): Promise<SearchSelectOption[]> => {
     const result = await costCentersService.list({
@@ -472,11 +458,10 @@ export function MatchDialog({
               emptyMessage="Nenhum centro de custo encontrado"
             />
             <TextField name="description" label="Descrição" required />
-            <SearchSelectField
+            <CategorySearchSelectField
               name="category_id"
               label="Categoria"
-              loadOptions={loadCategories}
-              placeholder="Buscar categoria..."
+              categoryType={categoryType}
               required
             />
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
