@@ -50,7 +50,7 @@ export async function loadRootCategories(
     per_page: 20,
   })
 
-  return result.data.map(mapCategoryOption)
+  return result.data.map((category) => mapCategoryOption(category))
 }
 
 export async function loadParentCategoryOptions(search: string): Promise<SearchSelectOption[]> {
@@ -60,7 +60,7 @@ export async function loadParentCategoryOptions(search: string): Promise<SearchS
     per_page: 20,
   })
 
-  return result.data.map(mapCategoryOption)
+  return result.data.map((category) => mapCategoryOption(category))
 }
 
 export async function loadSubcategories(
@@ -75,7 +75,7 @@ export async function loadSubcategories(
     per_page: 20,
   })
 
-  return result.data.map(mapCategoryOption)
+  return result.data.map((category) => mapCategoryOption(category))
 }
 
 export async function loadAllCategories(
