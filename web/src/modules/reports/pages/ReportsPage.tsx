@@ -694,11 +694,13 @@ function CategorySection() {
   ]
 
   const periodLabel =
-    query.data?.from && query.data?.to
-      ? `${formatDate(query.data.from)} até ${formatDate(query.data.to)}`
-      : from && to
-        ? `${formatDate(from)} até ${formatDate(to)}`
-        : 'Período não definido'
+    !from && !to
+      ? 'Todo o período'
+      : query.data?.from && query.data?.to
+        ? `${formatDate(query.data.from)} até ${formatDate(query.data.to)}`
+        : from && to
+          ? `${formatDate(from)} até ${formatDate(to)}`
+          : 'Período não definido'
 
   const categoryGroups = (query.data?.groups ?? [])
     .map((group) => {
@@ -806,6 +808,7 @@ function CategorySection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)

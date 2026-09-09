@@ -101,8 +101,8 @@ export interface MonthlySummaryRow {
 }
 
 export interface CategoryReport {
-  from: string
-  to: string
+  from: string | null
+  to: string | null
   expense: Array<{ category: string; total: number }>
   groups: CategoryBankAccountGroup[]
   matrix: CategoryMatrix

@@ -13,8 +13,8 @@ export interface RealizedEntry {
 }
 
 export interface RealizedCashFlow {
-  from: string
-  to: string
+  from: string | null
+  to: string | null
   opening_balance: number
   total_in: number
   total_out: number
@@ -49,7 +49,7 @@ export interface ProjectedCashFlow {
 }
 
 export const cashFlowService = {
-  async realized(params: Record<string, string>): Promise<RealizedCashFlow> {
+  async realized(params: Record<string, string | undefined>): Promise<RealizedCashFlow> {
     const response = await http.get<ApiResponse<RealizedCashFlow>>('/cash-flow/realized', { params })
 
     return response.data.data

@@ -490,17 +490,36 @@ class ReportService
      */
     public function byCategory(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-        $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
+        $allTime = $from === null && $to === null;
 
-        $settlements = Settlement::query()
+        $settlementsQuery = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
-            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
-            ->whereDate('settled_at', '>=', $from->toDateString())
-            ->whereDate('settled_at', '<=', $to->toDateString())
-            ->get();
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())]);
+
+        if (! $allTime) {
+            $fromDate = Carbon::parse($from)->startOfDay();
+            $toDate = Carbon::parse($to)->endOfDay();
+
+            $settlementsQuery
+                ->whereDate('settled_at', '>=', $fromDate->toDateString())
+                ->whereDate('settled_at', '<=', $toDate->toDateString());
+        }
+
+        $settlements = $settlementsQuery->get();
+
+        if ($allTime) {
+            $settledDates = $settlements->pluck('settled_at')->filter();
+
+            if ($settledDates->isEmpty()) {
+                $fromDate = now()->startOfMonth();
+                $toDate = now()->endOfMonth();
+            } else {
+                $fromDate = Carbon::parse($settledDates->min())->startOfMonth();
+                $toDate = Carbon::parse($settledDates->max())->endOfMonth();
+            }
+        }
 
         $expense = [];
         $groupsMap = [];
@@ -549,11 +568,11 @@ class ReportService
         $groups = $this->finalizeCategoryGroups($groupsMap);
 
         return [
-            'from' => $from->toDateString(),
-            'to' => $to->toDateString(),
+            'from' => $allTime ? null : $fromDate->toDateString(),
+            'to' => $allTime ? null : $toDate->toDateString(),
             'expense' => $this->asList($expense),
             'groups' => $groups,
-            'matrix' => $this->buildCategoryMatrix($settlements, $from, $to, $costCenterId),
+            'matrix' => $this->buildCategoryMatrix($settlements, $fromDate, $toDate, $costCenterId),
         ];
     }
 

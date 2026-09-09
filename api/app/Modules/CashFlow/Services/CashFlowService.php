@@ -17,25 +17,39 @@ class CashFlowService
      */
     public function realized(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $categoryId = null, ?string $costCenterId = null): array
     {
-        $fromDate = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-        $toDate = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
+        $allTime = $from === null && $to === null;
 
-        $openingBalance = round(
-            ($costCenterId ? 0.0 : $this->initialBalance($bankAccountId))
-            + $this->netSettled($fromDate->copy()->subSecond(), $bankAccountId, $categoryId, $costCenterId),
-            2,
-        );
+        if ($allTime) {
+            $openingBalance = round(
+                $costCenterId ? 0.0 : $this->initialBalance($bankAccountId),
+                2,
+            );
+        } else {
+            $fromDate = Carbon::parse($from)->startOfDay();
+            $toDate = Carbon::parse($to)->endOfDay();
 
-        $settlements = Settlement::query()
+            $openingBalance = round(
+                ($costCenterId ? 0.0 : $this->initialBalance($bankAccountId))
+                + $this->netSettled($fromDate->copy()->subSecond(), $bankAccountId, $categoryId, $costCenterId),
+                2,
+            );
+        }
+
+        $settlementsQuery = Settlement::query()
             ->countingFinancially()
             ->with(['account' => fn ($q) => $q->with(array_merge(ClassificationSlices::withAccount(), ['creditCard:id,uuid,bank_account_id,name']))])
-            ->whereDate('settled_at', '>=', $fromDate->toDateString())
-            ->whereDate('settled_at', '<=', $toDate->toDateString())
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
             ->forCategory($categoryId)
-            ->orderBy('settled_at')
-            ->get();
+            ->orderBy('settled_at');
+
+        if (! $allTime) {
+            $settlementsQuery
+                ->whereDate('settled_at', '>=', $fromDate->toDateString())
+                ->whereDate('settled_at', '<=', $toDate->toDateString());
+        }
+
+        $settlements = $settlementsQuery->get();
 
         $totalIn = 0.0;
         $totalOut = 0.0;
@@ -88,8 +102,8 @@ class CashFlowService
         }
 
         return [
-            'from' => $fromDate->toDateString(),
-            'to' => $toDate->toDateString(),
+            'from' => $allTime ? null : $fromDate->toDateString(),
+            'to' => $allTime ? null : $toDate->toDateString(),
             'opening_balance' => $openingBalance,
             'total_in' => round($totalIn, 2),
             'total_out' => round($totalOut, 2),

@@ -33,8 +33,8 @@ export default function CashFlowRealizedPage() {
   const categories = useCategoryOptions()
 
   const query = useRealizedCashFlow({
-    from,
-    to,
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
     ...(costCenterId ? { cost_center_id: costCenterId } : {}),
     ...(categoryId ? { category_id: categoryId } : {}),
   })
@@ -86,6 +86,7 @@ export default function CashFlowRealizedPage() {
             <DateRangeFilter
               from={from}
               to={to}
+              showClear
               onChange={({ from: nextFrom, to: nextTo }) => {
                 setFrom(nextFrom)
                 setTo(nextTo)
@@ -135,7 +136,12 @@ export default function CashFlowRealizedPage() {
           rows={query.data?.entries ?? []}
           rowKey={(e) => e.id}
           loading={query.isPending}
-          emptyState={<EmptyState icon={TrendingUp} title="Nenhuma movimentação no período" />}
+          emptyState={
+            <EmptyState
+              icon={TrendingUp}
+              title={from || to ? 'Nenhuma movimentação no período' : 'Nenhuma movimentação encontrada'}
+            />
+          }
         />
       </PageContent>
     </Page>
