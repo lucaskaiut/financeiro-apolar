@@ -194,10 +194,80 @@ class AccountImportTest extends TestCase
             'cost_center_id' => $costCenterId,
         ], ['Accept' => 'application/json'])->assertStatus(202);
 
-        $this->assertSame(1, Category::query()->whereNull('parent_id')->whereRaw('LOWER(name) = ?', ['mensais fixos'])->count());
+        $this->assertSame(1, Category::query()->whereNull('parent_id')->count());
         $account = FinancialAccount::query()->first();
         $this->assertSame('Mensais Fixos', $account?->category?->name);
         $this->assertSame('Agua', $account?->subcategory?->name);
+    }
+
+    public function test_reuses_existing_category_with_trim_and_accents(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $costCenterId = $this->createCostCenter();
+
+        $this->postJson('/api/categories', [
+            'name' => 'Despesas Bancárias',
+            'type' => 'expense',
+            'status' => 'active',
+        ])->assertCreated();
+
+        $file = $this->makeXlsx(
+            ['GRUPO', 'TIPO DE DESPESA', 'VENCIMENTO', 'R$ PREVISTO', '$ REALIZADO', 'STATUS'],
+            [['  despesas bancarias  ', 'Tarifa', '08/02/2026', 100, 100, 'Pago']],
+        );
+
+        $this->post('/api/accounts/import', [
+            'file' => $file,
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $costCenterId,
+        ], ['Accept' => 'application/json'])->assertStatus(202);
+
+        $this->assertSame(1, Category::query()->whereNull('parent_id')->count());
+        $account = FinancialAccount::query()->first();
+        $this->assertSame('Despesas Bancárias', $account?->category?->name);
+    }
+
+    public function test_reuses_existing_subcategory_with_trim_and_accents(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $costCenterId = $this->createCostCenter();
+
+        $categoryId = $this->postJson('/api/categories', [
+            'name' => 'Mensais Fixos',
+            'type' => 'expense',
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/categories', [
+            'name' => 'Água',
+            'type' => 'expense',
+            'parent_id' => $categoryId,
+            'status' => 'active',
+        ])->assertCreated();
+
+        $file = $this->makeXlsx(
+            ['GRUPO', 'TIPO DE DESPESA', 'VENCIMENTO', 'R$ PREVISTO', '$ REALIZADO', 'STATUS'],
+            [['MENSAIS FIXOS', '  agua  ', '08/02/2026', 100, 100, 'Pago']],
+        );
+
+        $this->post('/api/accounts/import', [
+            'file' => $file,
+            'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $costCenterId,
+        ], ['Accept' => 'application/json'])->assertStatus(202);
+
+        $category = Category::query()->whereNull('parent_id')->first();
+        $this->assertNotNull($category);
+        $this->assertSame(1, Category::query()->where('parent_id', $category->uuid)->count());
+
+        $account = FinancialAccount::query()->first();
+        $this->assertSame('Água', $account?->subcategory?->name);
     }
 
     public function test_imports_legacy_spreadsheet_as_settled_payables(): void

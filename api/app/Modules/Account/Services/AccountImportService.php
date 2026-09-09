@@ -11,11 +11,11 @@ use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\Category\Enums\CategoryType;
 use App\Modules\Category\Models\Category;
+use App\Modules\Shared\Support\StringNormalizer;
 use App\Modules\User\Models\User;
 use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Normalizer;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Reader\IReader;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
@@ -99,9 +99,9 @@ class AccountImportService
                     continue;
                 }
 
-                $categoryName = trim((string) ($row[$columns['category']] ?? ''));
+                $categoryName = StringNormalizer::trim((string) ($row[$columns['category']] ?? ''));
                 $subcategoryName = $columns['subcategory'] !== null
-                    ? trim((string) ($row[$columns['subcategory']] ?? ''))
+                    ? StringNormalizer::trim((string) ($row[$columns['subcategory']] ?? ''))
                     : '';
                 $description = $this->resolveDescription($row, $columns);
                 $dueDate = $columns['dueDate'] !== null ? $this->parseDate($row[$columns['dueDate']] ?? null) : null;
@@ -452,17 +452,14 @@ class AccountImportService
      */
     private function findOrCreateCategory(array &$cache, string $name): Category
     {
-        $key = mb_strtolower($name);
+        $name = StringNormalizer::trim($name);
+        $key = StringNormalizer::sanitize($name);
 
         if (isset($cache[$key])) {
             return $cache[$key];
         }
 
-        $category = Category::query()
-            ->whereNull('parent_id')
-            ->where('type', CategoryType::Expense->value)
-            ->whereRaw('LOWER(name) = ?', [$key])
-            ->first();
+        $category = $this->findExistingCategory(null, $key);
 
         if ($category === null) {
             $category = Category::query()->create([
@@ -480,22 +477,19 @@ class AccountImportService
      */
     private function findOrCreateSubcategory(array &$cache, Category $category, string $name): ?Category
     {
-        $name = trim($name);
+        $name = StringNormalizer::trim($name);
 
-        if ($name === '' || mb_strtolower($name) === mb_strtolower($category->name)) {
+        if ($name === '' || StringNormalizer::sanitize($name) === StringNormalizer::sanitize($category->name)) {
             return null;
         }
 
-        $key = $category->uuid.'::'.mb_strtolower($name);
+        $key = $category->uuid.'::'.StringNormalizer::sanitize($name);
 
         if (array_key_exists($key, $cache)) {
             return $cache[$key];
         }
 
-        $subcategory = Category::query()
-            ->where('parent_id', $category->uuid)
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-            ->first();
+        $subcategory = $this->findExistingCategory($category->uuid, StringNormalizer::sanitize($name));
 
         if ($subcategory === null) {
             $subcategory = Category::query()->create([
@@ -509,24 +503,32 @@ class AccountImportService
         return $cache[$key] = $subcategory;
     }
 
-    private function normalize(mixed $value): string
+    private function findExistingCategory(?string $parentId, string $normalizedName): ?Category
     {
-        return $this->removeAccents(mb_strtolower(trim((string) $value)));
-    }
+        $query = Category::query()->where('type', CategoryType::Expense->value);
 
-    /**
-     * Remove acentos usando a extensão intl (funciona em Alpine/musl,
-     * onde o iconv //TRANSLIT não translitera corretamente).
-     */
-    private function removeAccents(string $value): string
-    {
-        $decomposed = Normalizer::normalize($value, Normalizer::FORM_D);
-
-        if ($decomposed === false) {
-            return $value;
+        if ($parentId === null) {
+            $query->whereNull('parent_id');
+        } else {
+            $query->where('parent_id', $parentId);
         }
 
-        return preg_replace('/[\x{0300}-\x{036F}]/u', '', $decomposed) ?? $value;
+        $category = (clone $query)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [$normalizedName])
+            ->first();
+
+        if ($category !== null) {
+            return $category;
+        }
+
+        return $query->get()->first(
+            fn (Category $candidate) => StringNormalizer::sanitize($candidate->name) === $normalizedName
+        );
+    }
+
+    private function normalize(mixed $value): string
+    {
+        return StringNormalizer::sanitize((string) $value);
     }
 
     /**
