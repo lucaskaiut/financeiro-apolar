@@ -21,12 +21,21 @@ interface CategoryMatrixViewerProps {
   open: boolean
   onClose: () => void
   matrix: CategoryMatrix
-  from: string
-  to: string
+  from: string | null
+  to: string | null
   costCenterLabel: string
 }
 
+function formatPeriodLabel(from: string | null, to: string | null): string {
+  if (!from || !to) {
+    return 'Todo o período'
+  }
+
+  return `${formatDate(from)} até ${formatDate(to)}`
+}
+
 export function CategoryMatrixViewer({ open, onClose, matrix, from, to, costCenterLabel }: CategoryMatrixViewerProps) {
+  const periodLabel = formatPeriodLabel(from, to)
   const captureRef = useRef<HTMLDivElement>(null)
   const [copying, setCopying] = useState(false)
 
@@ -50,7 +59,7 @@ export function CategoryMatrixViewer({ open, onClose, matrix, from, to, costCent
       open={open}
       onClose={onClose}
       title="Relatório por categoria"
-      description={`Período: ${formatDate(from)} até ${formatDate(to)} · ${costCenterLabel}`}
+      description={`Período: ${periodLabel} · ${costCenterLabel}`}
       size="2xl"
       footer={
         <>
@@ -68,7 +77,7 @@ export function CategoryMatrixViewer({ open, onClose, matrix, from, to, costCent
         <div className="mb-3 border-b border-gray-300 pb-2">
           <h3 className="text-sm font-bold text-gray-900">Relatório por categoria</h3>
           <p className="text-[11px] text-gray-600">
-            Período: {formatDate(from)} até {formatDate(to)} · {costCenterLabel}
+            Período: {periodLabel} · {costCenterLabel}
           </p>
           <div className="mt-2 text-[11px] text-gray-700">
             <span>Total geral: {formatCategoryAmount(matrix.grand_total.total)}</span>
