@@ -190,7 +190,7 @@ function DailySection() {
     items.map((item) => [item.description, item.category ?? '—', formatCurrency(item.value)])
   const movementXlsxRows = (items: MovementRow[]) =>
     items.map((item) => [item.description, item.category ?? '—', item.value])
-  const subtitle = buildReportScopeSubtitle([`Data: ${formatDate(date)}`, scopeLabel])
+  const subtitle = buildReportScopeSubtitle([date ? `Data: ${formatDate(date)}` : 'Todo o período', scopeLabel])
 
   const dailyScreenSections = dailyGroups.flatMap((group) => {
     const sections = []
@@ -308,6 +308,7 @@ function DailySection() {
             variant="single"
             from={date}
             to={date}
+            showClear
             onChange={({ to }) => setDate(to)}
           />
           <ReportScopeFilters
@@ -419,11 +420,13 @@ function WeeklySection() {
   ]
 
   const periodLabel =
-    query.data?.from && query.data?.to
-      ? `${formatDate(query.data.from)} até ${formatDate(query.data.to)}`
-      : from && to
-        ? `${formatDate(from)} até ${formatDate(to)}`
-        : 'Período não definido'
+    !from && !to
+      ? 'Todo o período'
+      : query.data?.from && query.data?.to
+        ? `${formatDate(query.data.from)} até ${formatDate(query.data.to)}`
+        : from && to
+          ? `${formatDate(from)} até ${formatDate(to)}`
+          : 'Período não definido'
 
   const subtitle = buildReportScopeSubtitle([`Período: ${periodLabel}`, scopeLabel])
 
@@ -458,6 +461,7 @@ function WeeklySection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)
@@ -590,7 +594,8 @@ function ProvisionSection() {
   }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
-  const subtitle = buildReportScopeSubtitle([`Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`, scopeLabel])
+  const periodLabel = !from && !to ? 'Todo o período' : `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`
+  const subtitle = buildReportScopeSubtitle([periodLabel, scopeLabel])
 
   const exportProvisionPdf = () => {
     if (!data) return
@@ -608,6 +613,7 @@ function ProvisionSection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)
@@ -892,7 +898,8 @@ function MonthlySummarySection() {
   }
   const periodFrom = data?.from ?? from
   const periodTo = data?.to ?? to
-  const subtitle = buildReportScopeSubtitle([`Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`, scopeLabel])
+  const periodLabel = !from && !to ? 'Todo o período' : `Período: ${formatDate(periodFrom)} até ${formatDate(periodTo)}`
+  const subtitle = buildReportScopeSubtitle([periodLabel, scopeLabel])
   const hasData = (data?.rows.length ?? 0) > 0
 
   const exportMonthlySummaryPdf = () => {
@@ -908,6 +915,7 @@ function MonthlySummarySection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)
@@ -1197,9 +1205,12 @@ function CashFlowSection() {
     { key: 'expected_final_balance', header: 'Saldo final esperado', align: 'right', cell: (row) => formatCurrency(row.expected_final_balance) },
   ]
 
+  const realizedPeriod = !from && !to
+    ? 'Todo o período'
+    : `Período: ${formatDate(query.data?.realized.from)} até ${formatDate(query.data?.realized.to)}`
   const subtitle = query.data
     ? buildReportScopeSubtitle([
-        `Período: ${formatDate(query.data.realized.from)} até ${formatDate(query.data.realized.to)}`,
+        realizedPeriod,
         `Projeção ${days} dias`,
         scopeLabel,
       ])
@@ -1236,6 +1247,7 @@ function CashFlowSection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)
@@ -1407,7 +1419,7 @@ function PayablesSection() {
   const exportSubtitle = data
     ? buildReportScopeSubtitle([
         `Referência: ${formatShortDate(data.reference_date)}`,
-        `Período: ${formatShortDate(data.from)} até ${formatShortDate(data.to)}`,
+        !from && !to ? 'Todo o período' : `Período: ${formatShortDate(data.from)} até ${formatShortDate(data.to)}`,
         scopeLabel,
       ])
     : scopeLabel
@@ -1558,6 +1570,7 @@ function PayablesSection() {
           <DateRangeFilter
             from={from}
             to={to}
+            showClear
             onChange={({ from: nextFrom, to: nextTo }) => {
               setFrom(nextFrom)
               setTo(nextTo)

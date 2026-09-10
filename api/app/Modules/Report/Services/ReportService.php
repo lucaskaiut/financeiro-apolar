@@ -29,14 +29,15 @@ class ReportService
      */
     public function daily(?string $date = null, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        $date = $date ? Carbon::parse($date) : now();
+        $allTime = $date === null || $date === '';
+        $date = $allTime ? null : Carbon::parse($date);
 
         $settlements = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
             ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
-            ->whereDate('settled_at', $date->toDateString())
+            ->when(! $allTime, fn ($q) => $q->whereDate('settled_at', $date->toDateString()))
             ->orderBy('settled_at')
             ->get();
 
@@ -95,7 +96,7 @@ class ReportService
         $groups = $this->finalizeDailyGroups($groupsMap);
 
         return [
-            'date' => $date->toDateString(),
+            'date' => $allTime ? null : $date->toDateString(),
             'payments' => $payments,
             'receipts' => $receipts,
             'groups' => $groups,
@@ -112,16 +113,18 @@ class ReportService
      */
     public function weekly(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfWeek();
-        $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfWeek();
+        $allTime = ($from === null || $from === '') && ($to === null || $to === '');
+        $from = $allTime ? null : ($from ? Carbon::parse($from)->startOfDay() : now()->startOfWeek());
+        $to = $allTime ? null : ($to ? Carbon::parse($to)->endOfDay() : now()->endOfWeek());
 
         $settlements = Settlement::query()
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
             ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
-            ->whereDate('settled_at', '>=', $from->toDateString())
-            ->whereDate('settled_at', '<=', $to->toDateString())
+            ->when(! $allTime, fn ($q) => $q
+                ->whereDate('settled_at', '>=', $from->toDateString())
+                ->whereDate('settled_at', '<=', $to->toDateString()))
             ->get();
 
         $totalPaid = 0.0;
@@ -165,6 +168,10 @@ class ReportService
 
         $groups = $this->finalizeWeeklyGroups($groupsMap);
 
+        if ($allTime) {
+            [$from, $to] = $this->resolveSettledRange($settlements, fn () => now()->startOfWeek(), fn () => now()->endOfWeek());
+        }
+
         return [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
@@ -182,8 +189,15 @@ class ReportService
      */
     public function provision(?string $from = null, ?string $to = null, int $days = 30, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        [$fromDate, $toDate] = $this->resolveProvisionPeriod($from, $to, $days);
-        $rawRows = $this->provisionRawRows($fromDate, $toDate, $bankAccountId, $costCenterId);
+        $allTime = ($from === null || $from === '') && ($to === null || $to === '');
+
+        if ($allTime) {
+            $rawRows = $this->provisionRawRows(null, null, $bankAccountId, $costCenterId);
+            [$fromDate, $toDate] = $this->resolveProvisionAllTimePeriod($rawRows, $days);
+        } else {
+            [$fromDate, $toDate] = $this->resolveProvisionPeriod($from, $to, $days);
+            $rawRows = $this->provisionRawRows($fromDate, $toDate, $bankAccountId, $costCenterId);
+        }
 
         return $this->buildProvisionMatrix($rawRows, $fromDate, $toDate);
     }
@@ -307,9 +321,33 @@ class ReportService
     }
 
     /**
+     * @param  list<array<string, mixed>>  $rawRows
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function resolveProvisionAllTimePeriod(array $rawRows, int $days): array
+    {
+        $dueDates = array_filter(array_column($rawRows, 'due_date'));
+
+        if ($dueDates === []) {
+            return $this->resolveProvisionPeriod(null, null, $days);
+        }
+
+        $fromDate = Carbon::parse(min($dueDates))->startOfDay();
+        $toDate = Carbon::parse(max($dueDates))->endOfDay();
+
+        $periodDays = (int) $fromDate->copy()->startOfDay()->diffInDays($toDate->copy()->startOfDay());
+
+        if ($periodDays > 365) {
+            $toDate = $fromDate->copy()->addDays(365)->endOfDay();
+        }
+
+        return [$fromDate, $toDate];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
-    private function provisionRawRows(Carbon $fromDate, Carbon $toDate, ?string $bankAccountId, ?string $costCenterId = null): array
+    private function provisionRawRows(?Carbon $fromDate, ?Carbon $toDate, ?string $bankAccountId, ?string $costCenterId = null): array
     {
         $base = fn () => FinancialAccount::query()
             ->with(ClassificationSlices::withAccount())
@@ -319,8 +357,9 @@ class ReportService
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
-            ->whereDate('due_date', '>=', $fromDate->toDateString())
-            ->whereDate('due_date', '<=', $toDate->toDateString());
+            ->when($fromDate !== null && $toDate !== null, fn ($q) => $q
+                ->whereDate('due_date', '>=', $fromDate->toDateString())
+                ->whereDate('due_date', '<=', $toDate->toDateString()));
 
         $futureAccounts = $base()->whereNull('recurrence_id')->whereNull('transfer_id')->whereNull('installment_group_id')->get();
         $installments = $base()->whereNotNull('installment_group_id')->get();
@@ -818,8 +857,25 @@ class ReportService
      */
     public function monthlySummary(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-        $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth();
+        $allTime = ($from === null || $from === '') && ($to === null || $to === '');
+        $from = $allTime ? null : ($from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth());
+        $to = $allTime ? null : ($to ? Carbon::parse($to)->endOfDay() : now()->endOfMonth());
+
+        $settlements = Settlement::query()
+            ->countingFinancially()
+            ->forBankAccount($bankAccountId)
+            ->forCostCenter($costCenterId)
+            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
+            ->when(! $allTime, fn ($q) => $q
+                ->whereDate('settled_at', '>=', $from->toDateString())
+                ->whereDate('settled_at', '<=', $to->toDateString()))
+            ->get();
+
+        if ($allTime) {
+            [$rangeFrom, $rangeTo] = $this->resolveSettledRange($settlements, fn () => now()->startOfMonth(), fn () => now()->endOfMonth());
+            $from = $rangeFrom->startOfMonth();
+            $to = $rangeTo->endOfMonth();
+        }
 
         [$columns, $monthKeys] = $this->buildMonthColumns($from, $to);
 
@@ -839,15 +895,6 @@ class ReportService
                 'total' => 0.0,
             ];
         }
-
-        $settlements = Settlement::query()
-            ->countingFinancially()
-            ->forBankAccount($bankAccountId)
-            ->forCostCenter($costCenterId)
-            ->with(['account' => fn ($q) => $q->with(ClassificationSlices::withAccount())])
-            ->whereDate('settled_at', '>=', $from->toDateString())
-            ->whereDate('settled_at', '<=', $to->toDateString())
-            ->get();
 
         foreach ($settlements as $settlement) {
             $account = $settlement->account;
@@ -1034,8 +1081,9 @@ class ReportService
      */
     public function payables(?string $from = null, ?string $to = null, ?string $bankAccountId = null, ?string $costCenterId = null): array
     {
-        $from = $from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth();
-        $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
+        $allTime = ($from === null || $from === '') && ($to === null || $to === '');
+        $from = $allTime ? null : ($from ? Carbon::parse($from)->startOfDay() : now()->startOfMonth());
+        $to = $allTime ? null : ($to ? Carbon::parse($to)->endOfDay() : now()->endOfDay());
         $today = now()->startOfDay();
         $todayString = $today->toDateString();
 
@@ -1047,14 +1095,27 @@ class ReportService
             ->countingFinancially()
             ->forBankAccount($bankAccountId)
             ->forCostCenter($costCenterId)
-            ->whereDate('due_date', '<=', $to->toDateString())
-            ->when($from, fn ($q) => $q->where(function ($inner) use ($from, $today): void {
-                $inner->whereDate('due_date', '>=', $from->toDateString())
-                    ->orWhereDate('due_date', '<', $today->toDateString());
-            }))
+            ->when(! $allTime, fn ($q) => $q
+                ->whereDate('due_date', '<=', $to->toDateString())
+                ->where(function ($inner) use ($from, $today): void {
+                    $inner->whereDate('due_date', '>=', $from->toDateString())
+                        ->orWhereDate('due_date', '<', $today->toDateString());
+                }))
             ->orderBy('due_date')
             ->orderBy('description')
             ->get();
+
+        if ($allTime) {
+            $dueDates = $accounts->pluck('due_date')->filter();
+
+            if ($dueDates->isNotEmpty()) {
+                $from = Carbon::parse($dueDates->min())->startOfDay();
+                $to = Carbon::parse($dueDates->max())->endOfDay();
+            } else {
+                $from = now()->startOfMonth();
+                $to = now()->endOfDay();
+            }
+        }
 
         $rows = [];
         $totalOpen = 0.0;
@@ -1420,6 +1481,24 @@ class ReportService
     }
 
     /**
+     * @param  \Illuminate\Support\Collection<int, Settlement>  $settlements
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function resolveSettledRange($settlements, callable $defaultFrom, callable $defaultTo): array
+    {
+        $settledDates = $settlements->pluck('settled_at')->filter();
+
+        if ($settledDates->isEmpty()) {
+            return [$defaultFrom(), $defaultTo()];
+        }
+
+        return [
+            Carbon::parse($settledDates->min())->startOfDay(),
+            Carbon::parse($settledDates->max())->endOfDay(),
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $slice
      */
     private function sliceMatchesCostCenter(array $slice, ?string $costCenterId): bool
@@ -1590,7 +1669,7 @@ class ReportService
     public function dailyExport(?string $date = null, ?string $bankAccountId = null, ?string $costCenterId = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $data = $this->daily($date, $bankAccountId, $costCenterId);
-        $dateLabel = Carbon::parse($data['date'])->format('d/m/Y');
+        $dateLabel = $data['date'] ? Carbon::parse($data['date'])->format('d/m/Y') : 'Todo o período';
         $costCenterLabel = $this->resolveReportScopeLabel($bankAccountId, $costCenterId);
 
         return $this->streamXlsx('relatorio-diario.xlsx', 'Diário', function (Worksheet $sheet) use ($data, $dateLabel, $costCenterLabel): void {
