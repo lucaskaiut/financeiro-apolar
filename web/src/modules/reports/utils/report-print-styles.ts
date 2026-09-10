@@ -113,17 +113,17 @@ export const REPORT_PRINT_STYLES = `
 
   /* applyXlsxSubtotalRow default / soft / group */
   table.report-table tr.subtotal-row td {
-    background: #dbeafe;
+    background: #bfdbfe;
     font-weight: 700;
   }
 
   table.report-table tr.subtotal-row-soft td {
-    background: #eff6ff;
+    background: #f1f5f9;
     font-weight: 700;
   }
 
   table.report-table tr.subtotal-row-group td {
-    background: #bfdbfe;
+    background: #93c5fd;
     font-weight: 700;
   }
 

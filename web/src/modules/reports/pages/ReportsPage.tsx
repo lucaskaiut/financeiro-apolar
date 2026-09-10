@@ -20,7 +20,6 @@ import { buildMonthlySummaryHtml } from '../utils/monthly-summary-html-export'
 import { useColumnTableState } from '../hooks/useColumnTableState'
 import { applyColumnTableState } from '../utils/column-table'
 import { applyColumnFiltersToCategoryMatrix } from '../utils/category-matrix-filter'
-import { downloadReportXlsx } from '../utils/client-xlsx-export'
 import {
   Badge,
   Button,
@@ -188,8 +187,6 @@ function DailySection() {
   const movementHeaders = ['Descrição', 'Categoria', 'Valor']
   const movementRows = (items: MovementRow[]) =>
     items.map((item) => [item.description, item.category ?? '—', formatCurrency(item.value)])
-  const movementXlsxRows = (items: MovementRow[]) =>
-    items.map((item) => [item.description, item.category ?? '—', item.value])
   const subtitle = buildReportScopeSubtitle([date ? `Data: ${formatDate(date)}` : 'Todo o período', scopeLabel])
 
   const dailyScreenSections = dailyGroups.flatMap((group) => {
@@ -261,48 +258,12 @@ function DailySection() {
     return sections
   })
 
-  const exportDailyXlsx = () => {
-    downloadReportXlsx({
-      filename: 'relatorio-diario.xlsx',
-      title: 'Relatório diário',
-      subtitleLines: [subtitle],
-      tables: dailyGroups.flatMap((group) => {
-        const tables = []
-
-        if (group.payments.length > 0) {
-          tables.push({
-            banner: `${group.bank_account} · Pagamentos`,
-            headers: movementHeaders,
-            rows: movementXlsxRows(group.payments),
-            footer: ['Total pago', '', group.total_paid],
-          })
-        }
-
-        if (group.receipts.length > 0) {
-          tables.push({
-            banner: `${group.bank_account} · Recebimentos`,
-            headers: movementHeaders,
-            rows: movementXlsxRows(group.receipts),
-            footer: ['Total recebido', '', group.total_received],
-          })
-        }
-
-        tables.push({
-          banner: `${group.bank_account} · Saldo do centro`,
-          headers: movementHeaders,
-          rows: [],
-          footer: ['Saldo', '', group.balance],
-        })
-
-        return tables
-      }),
-      summary: [
-        { label: 'Total pago', value: filteredPaid },
-        { label: 'Total recebido', value: filteredReceived },
-        { label: 'Saldo do dia', value: filteredBalance },
-      ],
+  const exportDailyXlsx = () =>
+    reportsService.dailyExport({
+      date: date || undefined,
+      bank_account_id: bankAccountId || undefined,
+      cost_center_id: costCenterId || undefined,
     })
-  }
 
   return (
     <Card>
@@ -435,29 +396,13 @@ function WeeklySection() {
 
   const subtitle = buildReportScopeSubtitle([`Período: ${periodLabel}`, scopeLabel])
 
-  const exportWeeklyXlsx = () => {
-    downloadReportXlsx({
-      filename: 'relatorio-semanal.xlsx',
-      title: 'Relatório semanal',
-      subtitleLines: [subtitle],
-      tables: [
-        {
-          headers: ['Centro de custo', 'Total pago', 'Total recebido', 'Saldo líquido'],
-          rows: weeklyGroups.map((group) => [
-            group.bank_account,
-            group.total_paid,
-            group.total_received,
-            group.net_balance,
-          ]),
-        },
-      ],
-      summary: [
-        { label: 'Total pago', value: filteredPaid },
-        { label: 'Total recebido', value: filteredReceived },
-        { label: 'Saldo líquido', value: filteredBalance },
-      ],
+  const exportWeeklyXlsx = () =>
+    reportsService.weeklyExport({
+      from: from || undefined,
+      to: to || undefined,
+      bank_account_id: bankAccountId || undefined,
+      cost_center_id: costCenterId || undefined,
     })
-  }
 
   return (
     <Card>
@@ -767,63 +712,13 @@ function CategorySection() {
     )
   }
 
-  const exportCategoryXlsx = () => {
-    if (filteredMatrix && filteredMatrix.groups.length > 0) {
-      downloadReportXlsx({
-        filename: 'relatorio-por-categoria.xlsx',
-        title: 'Relatório por categoria',
-        subtitleLines: [subtitle],
-        tables: filteredMatrix.groups.flatMap((group) => {
-          const headers = ['Descrição', ...filteredMatrix.columns.map((column) => column.label), 'Total geral']
-          const rows: Array<Array<string | number | null>> = []
-
-          for (const category of group.categories) {
-            rows.push([
-              `${category.category} - Totais`,
-              ...filteredMatrix.columns.map((column) => category.subtotal.amounts[column.key] ?? null),
-              category.subtotal.total,
-            ])
-            for (const subcategory of category.subcategories) {
-              rows.push([
-                `${subcategory.subcategory} - Totais`,
-                ...filteredMatrix.columns.map((column) => subcategory.subtotal.amounts[column.key] ?? null),
-                subcategory.subtotal.total,
-              ])
-            }
-          }
-
-          return [
-            {
-              banner: group.bank_account,
-              headers,
-              rows,
-              footer: [
-                `${group.bank_account} - Totais`,
-                ...filteredMatrix.columns.map((column) => group.subtotal.amounts[column.key] ?? null),
-                group.subtotal.total,
-              ],
-            },
-          ]
-        }),
-        summary: [
-          { label: 'Total geral do período', value: filteredMatrix.grand_total.total },
-        ],
-      })
-      return
-    }
-
-    downloadReportXlsx({
-      filename: 'relatorio-por-categoria.xlsx',
-      title: 'Relatório por categoria',
-      subtitleLines: [subtitle],
-      tables: categoryGroups.map((group) => ({
-        banner: group.bank_account,
-        headers: ['Categoria', 'Valor'],
-        rows: group.expense.map((row) => [row.category, row.total]),
-        footer: ['Total', group.total_expense],
-      })),
+  const exportCategoryXlsx = () =>
+    reportsService.byCategoryExport({
+      from: from || undefined,
+      to: to || undefined,
+      bank_account_id: bankAccountId || undefined,
+      cost_center_id: costCenterId || undefined,
     })
-  }
 
   return (
     <Card>
@@ -1051,31 +946,10 @@ function BankAccountSection() {
     balance: rows.reduce((sum, row) => sum + row.balance, 0),
   }
 
-  const exportBankAccountXlsx = () => {
-    downloadReportXlsx({
-      filename: 'relatorio-por-conta-bancaria.xlsx',
-      title: 'Relatório por conta bancária',
-      subtitleLines: [scopeLabel],
-      tables: [
-        {
-          headers: costCenterHeaders,
-          rows: rows.map((row) => [
-            row.bank_account,
-            row.initial_balance,
-            row.income,
-            row.expense,
-            row.balance,
-          ]),
-        },
-      ],
-      summary: [
-        { label: 'Saldo inicial total', value: grandTotals.initial },
-        { label: 'Entradas totais', value: grandTotals.income },
-        { label: 'Saídas totais', value: grandTotals.expense },
-        { label: 'Saldo total', value: grandTotals.balance },
-      ],
+  const exportBankAccountXlsx = () =>
+    reportsService.byBankAccountExport({
+      bank_account_id: bankAccountId || undefined,
     })
-  }
 
   return (
     <Card>
@@ -1242,29 +1116,14 @@ function CashFlowSection() {
       ])
     : scopeLabel
 
-  const exportCashFlowXlsx = () => {
-    downloadReportXlsx({
-      filename: 'demonstrativo-fluxo-caixa.xlsx',
-      title: 'Demonstrativo de fluxo de caixa',
-      subtitleLines: [subtitle],
-      tables: [
-        {
-          headers: ['Conta bancária', 'Resultado realizado', 'Resultado projetado', 'Saldo final esperado'],
-          rows: cashFlowGroups.map((group) => [
-            group.bank_account,
-            group.realized_net,
-            group.projected_net,
-            group.expected_final_balance,
-          ]),
-        },
-      ],
-      summary: [
-        { label: 'Resultado realizado', value: filteredComparative.realized_net },
-        { label: 'Resultado projetado', value: filteredComparative.projected_net },
-        { label: 'Saldo final esperado', value: filteredComparative.expected_final_balance },
-      ],
+  const exportCashFlowXlsx = () =>
+    reportsService.cashFlowExport({
+      from: from || undefined,
+      to: to || undefined,
+      days,
+      bank_account_id: bankAccountId || undefined,
+      cost_center_id: costCenterId || undefined,
     })
-  }
 
   return (
     <Card>
@@ -1465,67 +1324,14 @@ function PayablesSection() {
     printHtmlReport('Relatório de contas a pagar', buildPayablesReportHtml(exportViewData, 'Relatório de contas a pagar', exportSubtitle))
   }
 
-  const exportPayablesXlsx = () => {
-    if (!exportViewData) return
-
-    const referenceDate = formatShortDate(exportViewData.reference_date)
-    const tables = exportViewData.groups.flatMap((group) => {
-      const groupTables = []
-
-      groupTables.push({
-        banner: group.bank_account,
-        headers: ['Data', 'Descrição', 'Valor'],
-        rows: [] as Array<Array<string | number | null>>,
-      })
-
-      if (group.overdue.accounts.length > 0) {
-        groupTables.push({
-          banner: 'EM ATRASO',
-          headers: ['Data', 'Descrição', 'Valor'],
-          rows: group.overdue.accounts.map((account) => [
-            formatShortDate(account.due_date),
-            account.description,
-            account.remaining_amount,
-          ]),
-          footer: ['TOTAL EM ATRASO', '', group.overdue.total],
-        })
-      }
-
-      if (group.due_today.accounts.length > 0) {
-        groupTables.push({
-          banner: `PAGOS EM ${referenceDate}`,
-          headers: ['Data', 'Descrição', 'Valor'],
-          rows: group.due_today.accounts.map((account) => [
-            formatShortDate(account.due_date),
-            account.description,
-            account.remaining_amount,
-          ]),
-          footer: ['TOTAL PAGO', '', group.due_today.total],
-        })
-      }
-
-      return groupTables
+  const exportPayablesXlsx = () =>
+    reportsService.payablesExport({
+      from: from || undefined,
+      to: to || undefined,
+      bank_account_id: bankAccountId || undefined,
+      cost_center_id: costCenterId || undefined,
+      selected_ids: Array.from(selected).join(',') || undefined,
     })
-
-    downloadReportXlsx({
-      filename: 'contas-a-pagar.xlsx',
-      title: 'Relatório de contas a pagar',
-      subtitleLines: [exportSubtitle],
-      tables: [
-        ...tables,
-        {
-          banner: `Resumo geral em ${referenceDate}`,
-          headers: ['Centro de custo', 'Pagos', 'Em atraso'],
-          rows: exportViewData.summary.paid_today.rows.map((row, index) => [
-            row.bank_account,
-            row.amount,
-            exportViewData.summary.overdue.rows[index]?.amount ?? 0,
-          ]),
-          footer: ['TOTAL', exportViewData.summary.paid_today.total, exportViewData.summary.overdue.total],
-        },
-      ],
-    })
-  }
 
   const columnsFor = (group: (typeof groups)[number], index: number): Array<Column<PayableAccount>> => {
     const allInGroupSelected = group.accounts.length > 0 && group.accounts.every((account) => selected.has(account.id))

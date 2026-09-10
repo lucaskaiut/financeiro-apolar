@@ -1851,7 +1851,7 @@ class ReportService
 
                     $categoryTotalCells[] = $this->xlsxMoney($category['subtotal']['total']);
                     $sheet->fromArray($categoryTotalCells, null, "B{$row}");
-                    $this->applyXlsxSubtotalRow($sheet, $row, $columnCount);
+                    $this->applyXlsxSubtotalRow($sheet, $row, $columnCount, 'FFBFDBFE');
                     $row++;
 
                     foreach ($category['subcategories'] as $subcategory) {
@@ -1864,7 +1864,7 @@ class ReportService
 
                         $subtotalCells[] = $this->xlsxMoney($subcategory['subtotal']['total']);
                         $sheet->fromArray($subtotalCells, null, "B{$row}");
-                        $this->applyXlsxSubtotalRow($sheet, $row, $columnCount, 'FFEFF6FF');
+                        $this->applyXlsxSubtotalRow($sheet, $row, $columnCount, 'FFF1F5F9');
                         $row++;
                     }
                 }
@@ -1878,7 +1878,7 @@ class ReportService
 
                 $groupTotalCells[] = $this->xlsxMoney($group['subtotal']['total']);
                 $sheet->fromArray($groupTotalCells, null, "B{$row}");
-                $this->applyXlsxSubtotalRow($sheet, $row, $columnCount, 'FFBFDBFE');
+                $this->applyXlsxSubtotalRow($sheet, $row, $columnCount, 'FF93C5FD');
                 $row += 2;
             }
 

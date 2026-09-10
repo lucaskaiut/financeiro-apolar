@@ -112,8 +112,8 @@ function BankAccountRows({
         <CategoryRows key={`${group.bank_account}-${category.category}`} category={category} matrix={matrix} cellClass={cellClass} />
       ))}
 
-      <tr className={cn('border-b border-surface-3 bg-blue-200/70 font-bold dark:bg-blue-900/50', compact ? 'text-[11px]' : 'text-sm')}>
-        <td className={cn('sticky left-0 z-10 bg-blue-200/95 text-foreground dark:bg-blue-900/90', labelColumnClass, cellClass)}>
+      <tr className={cn('border-b border-surface-3 bg-blue-300/50 font-bold dark:bg-blue-800/50', compact ? 'text-[11px]' : 'text-sm')}>
+        <td className={cn('sticky left-0 z-10 bg-blue-300/95 text-foreground dark:bg-blue-800/90', labelColumnClass, cellClass)}>
           {group.bank_account} - Totais
         </td>
         <AmountCells totals={group.subtotal} matrix={matrix} cellClass={cellClass} />
@@ -133,8 +133,8 @@ function CategoryRows({
 }) {
   return (
     <>
-      <tr className="border-b border-surface-3 bg-blue-100/60 font-semibold dark:bg-blue-950/30">
-        <td className={cn('sticky left-0 z-10 bg-blue-100/95 text-foreground dark:bg-blue-950/90', labelColumnClass, cellClass)}>
+      <tr className="border-b border-surface-3 bg-blue-200/60 font-semibold dark:bg-blue-900/40">
+        <td className={cn('sticky left-0 z-10 bg-blue-200/95 text-foreground dark:bg-blue-900/90', labelColumnClass, cellClass)}>
           {category.category} - Totais
         </td>
         <AmountCells totals={category.subtotal} matrix={matrix} cellClass={cellClass} />
@@ -158,8 +158,8 @@ function SubcategoryRows({
 }) {
   return (
     <>
-      <tr className="border-b border-surface-3 bg-blue-50/80 font-semibold dark:bg-blue-950/20">
-        <td className={cn('sticky left-0 z-10 bg-blue-50/95 pl-6 text-foreground dark:bg-blue-950/80', labelColumnClass, cellClass)}>
+      <tr className="border-b border-surface-3 bg-slate-100/80 font-semibold dark:bg-slate-900/30">
+        <td className={cn('sticky left-0 z-10 bg-slate-100/95 pl-6 text-foreground dark:bg-slate-900/80', labelColumnClass, cellClass)}>
           {subcategory.subcategory} - Totais
         </td>
         <AmountCells totals={subcategory.subtotal} matrix={matrix} cellClass={cellClass} />
