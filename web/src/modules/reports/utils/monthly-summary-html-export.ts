@@ -1,4 +1,4 @@
-import { formatDate } from '@/shared/utils/format'
+import { formatCurrency } from '@/shared/utils/format'
 import { escapeHtml } from '@/shared/utils/report-export'
 import type { MonthlySummaryReport } from '../services/reports.service'
 import { formatCategoryAmount } from './category-format'
@@ -20,7 +20,10 @@ export function buildMonthlySummaryHtml(data: MonthlySummaryReport, title: strin
 
     sections.push(
       `<tr>${cells
-        .map((value, index) => `<td class="${index === 0 ? '' : 'amount'}"${index === 0 ? ' style="font-weight:600"' : ''}>${value}</td>`)
+        .map(
+          (value, index) =>
+            `<td class="${index === 0 ? 'label-bold' : 'amount'}">${value}</td>`,
+        )
         .join('')}</tr>`,
     )
   }
@@ -32,7 +35,7 @@ export function buildMonthlySummaryHtml(data: MonthlySummaryReport, title: strin
   ]
 
   sections.push(
-    `<tr class="total-row">${totalCells
+    `<tr class="total-row-grand">${totalCells
       .map((value, index) => `<td class="${index === 0 ? '' : 'amount'}">${value}</td>`)
       .join('')}</tr>`,
   )
@@ -51,9 +54,12 @@ export function buildMonthlySummaryHtml(data: MonthlySummaryReport, title: strin
     .map((line) => line.trim())
     .filter(Boolean)
 
+  const summaryLine = `Total geral: ${formatCurrency(data.grand_total.total)} | Média mês: ${formatCurrency(data.monthly_average)}`
+
   return `
     <h1 class="report-title">${escapeHtml(title)}</h1>
     ${subtitleLines.map((line) => `<p class="report-subtitle">${escapeHtml(line)}</p>`).join('')}
+    <p class="report-summary-line">${escapeHtml(summaryLine)}</p>
     <table class="report-table">
       <thead>
         <tr class="column-header">${headers
@@ -67,10 +73,5 @@ export function buildMonthlySummaryHtml(data: MonthlySummaryReport, title: strin
         ${sections.join('')}
       </tbody>
     </table>
-    <div class="report-summary">
-      <div class="report-summary-row"><span>Total geral do período</span><strong>${cell(data.grand_total.total)}</strong></div>
-      <div class="report-summary-row"><span>Média mês</span><strong>${cell(data.monthly_average)}</strong></div>
-      <div class="report-summary-row"><span>Gerado em</span><span>${escapeHtml(formatDate(new Date().toISOString()))}</span></div>
-    </div>
   `
 }

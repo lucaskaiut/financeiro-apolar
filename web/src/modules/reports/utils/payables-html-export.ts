@@ -91,43 +91,46 @@ function accountRow(account: PayableAccount): string {
   </tr>`
 }
 
+function mutedHeaderRow(): string {
+  return `<tr class="column-header-muted">
+    <th>Data</th>
+    <th>Descrição</th>
+    <th class="amount">Valor</th>
+  </tr>`
+}
+
 export function buildPayablesReportHtml(data: PayablesExportReport, title: string, subtitle: string): string {
   const referenceDate = formatShortDate(data.reference_date)
   const sections: string[] = []
 
   for (const group of data.groups) {
     sections.push(`<tr class="section-banner"><td colspan="3">${escapeHtml(group.bank_account)}</td></tr>`)
-    sections.push(
-      `<tr class="column-header">
-        <th>Data</th>
-        <th>Descrição</th>
-        <th class="amount">Valor</th>
-      </tr>`,
-    )
 
     if (group.overdue.accounts.length > 0) {
       sections.push(`<tr class="status-overdue"><td colspan="3">EM ATRASO</td></tr>`)
+      sections.push(mutedHeaderRow())
       for (const account of group.overdue.accounts) {
         sections.push(accountRow(account))
       }
       sections.push(
-        `<tr class="total-overdue"><td colspan="2">TOTAL EM ATRASO</td><td class="amount">${escapeHtml(formatCurrency(group.overdue.total))}</td></tr>`,
+        `<tr class="footer-overdue"><td colspan="2">TOTAL EM ATRASO</td><td class="amount">${escapeHtml(formatCurrency(group.overdue.total))}</td></tr>`,
       )
+      sections.push('<tr class="spacer"><td colspan="3"></td></tr>')
     }
 
     if (group.due_today.accounts.length > 0) {
       sections.push(
         `<tr class="status-paid"><td colspan="3">PAGOS EM ${escapeHtml(referenceDate)}</td></tr>`,
       )
+      sections.push(mutedHeaderRow())
       for (const account of group.due_today.accounts) {
         sections.push(accountRow(account))
       }
       sections.push(
-        `<tr class="total-paid"><td colspan="2">TOTAL PAGO</td><td class="amount">${escapeHtml(formatCurrency(group.due_today.total))}</td></tr>`,
+        `<tr class="footer-paid"><td colspan="2">TOTAL PAGO</td><td class="amount">${escapeHtml(formatCurrency(group.due_today.total))}</td></tr>`,
       )
+      sections.push('<tr class="spacer"><td colspan="3"></td></tr>')
     }
-
-    sections.push('<tr class="spacer"><td colspan="3"></td></tr>')
   }
 
   const paidSummaryRows = data.summary.paid_today.rows
@@ -155,32 +158,26 @@ export function buildPayablesReportHtml(data: PayablesExportReport, title: strin
     <table class="report-table">
       <tbody>${sections.join('')}</tbody>
     </table>
-    <h2 class="summary-heading">Resumo geral em ${escapeHtml(referenceDate)}</h2>
-    <div class="summary-grid">
-      <div class="summary-box">
-        <div class="summary-title is-success">${escapeHtml(data.summary.paid_today.title)}</div>
-        <table class="report-table" style="margin:0">
-          <thead>
-            <tr class="column-header"><th>Centro de custo</th><th class="amount">Valor</th></tr>
-          </thead>
-          <tbody>
-            ${paidSummaryRows}
-            <tr class="total-paid"><td>TOTAL PAGOS</td><td class="amount">${escapeHtml(formatCurrency(data.summary.paid_today.total))}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="summary-box">
-        <div class="summary-title is-danger">Em atraso</div>
-        <table class="report-table" style="margin:0">
-          <thead>
-            <tr class="column-header"><th>Centro de custo</th><th class="amount">Valor</th></tr>
-          </thead>
-          <tbody>
-            ${overdueSummaryRows}
-            <tr class="total-overdue"><td>TOTAL EM ATRASO</td><td class="amount">${escapeHtml(formatCurrency(data.summary.overdue.total))}</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <p class="summary-heading">Resumo geral em ${escapeHtml(referenceDate)}</p>
+    <p class="summary-title-text is-success">${escapeHtml(data.summary.paid_today.title)}</p>
+    <table class="report-table">
+      <thead>
+        <tr class="column-header"><th>Centro de custo</th><th class="amount">Valor</th></tr>
+      </thead>
+      <tbody>
+        ${paidSummaryRows}
+        <tr class="footer-row"><td>TOTAL</td><td class="amount">${escapeHtml(formatCurrency(data.summary.paid_today.total))}</td></tr>
+      </tbody>
+    </table>
+    <p class="summary-title-text is-danger">${escapeHtml(data.summary.overdue.title)}</p>
+    <table class="report-table">
+      <thead>
+        <tr class="column-header"><th>Centro de custo</th><th class="amount">Valor</th></tr>
+      </thead>
+      <tbody>
+        ${overdueSummaryRows}
+        <tr class="footer-row"><td>TOTAL</td><td class="amount">${escapeHtml(formatCurrency(data.summary.overdue.total))}</td></tr>
+      </tbody>
+    </table>
   `
 }

@@ -223,36 +223,40 @@ function DailySection() {
   })
 
   const dailyPdfSections = dailyGroups.flatMap((group) => {
-    const sections = []
+    const sections: Parameters<typeof buildReportHtml>[0]['sections'] = [
+      { title: group.bank_account, hideHeader: true, headers: movementHeaders, rows: [] },
+    ]
 
     if (group.payments.length > 0) {
       sections.push({
-        title: `${group.bank_account} · Pagamentos`,
+        subtitle: 'Pagamentos realizados',
         headers: movementHeaders,
         rows: movementRows(group.payments),
         amountColumns: [2],
-        footer: { label: 'Total pago', value: formatCurrency(group.total_paid) },
+        mutedHeader: true,
       })
     }
 
     if (group.receipts.length > 0) {
       sections.push({
-        title: `${group.bank_account} · Recebimentos`,
+        subtitle: 'Recebimentos realizados',
         headers: movementHeaders,
         rows: movementRows(group.receipts),
         amountColumns: [2],
-        footer: { label: 'Total recebido', value: formatCurrency(group.total_received) },
+        mutedHeader: true,
       })
     }
 
-    if (group.payments.length > 0 || group.receipts.length > 0) {
-      sections.push({
-        title: `${group.bank_account} · Saldo do centro`,
-        headers: movementHeaders,
-        rows: [],
-        footer: { label: 'Saldo', value: formatCurrency(group.balance) },
-      })
-    }
+    sections.push({
+      hideHeader: true,
+      headers: movementHeaders,
+      rows: [],
+      footers: [
+        { label: 'Total pago', value: formatCurrency(group.total_paid), variant: 'footer' },
+        { label: 'Total recebido', value: formatCurrency(group.total_received), variant: 'footer' },
+        { label: 'Saldo do centro', value: formatCurrency(group.balance), variant: 'footer' },
+      ],
+    })
 
     return sections
   })
@@ -341,10 +345,11 @@ function DailySection() {
                         title: 'Relatório diário',
                         subtitle,
                         sections: dailyPdfSections,
-                        summary: [
-                          { label: 'Total pago', value: formatCurrency(filteredPaid) },
-                          { label: 'Total recebido', value: formatCurrency(filteredReceived) },
-                          { label: 'Saldo do dia', value: formatCurrency(filteredBalance) },
+                        totalColumns: 3,
+                        totalRows: [
+                          { label: 'Total geral pago', value: formatCurrency(filteredPaid), variant: 'total-grand' },
+                          { label: 'Total geral recebido', value: formatCurrency(filteredReceived), variant: 'total-grand' },
+                          { label: 'Saldo geral do dia', value: formatCurrency(filteredBalance), variant: 'total-grand' },
                         ],
                       }),
                     )
@@ -495,17 +500,30 @@ function WeeklySection() {
                     buildReportHtml({
                       title: 'Relatório semanal',
                       subtitle,
-                      sections: weeklyGroups.map((group) => ({
-                        title: group.bank_account,
-                        headers: ['Total pago', 'Total recebido', 'Saldo líquido'],
-                        rows: [[formatCurrency(group.total_paid), formatCurrency(group.total_received), formatCurrency(group.net_balance)]],
-                        amountColumns: [0, 1, 2],
-                        footer: { label: 'Saldo do centro', value: formatCurrency(group.net_balance) },
-                      })),
-                      summary: [
-                        { label: 'Total pago', value: formatCurrency(filteredPaid) },
-                        { label: 'Total recebido', value: formatCurrency(filteredReceived) },
-                        { label: 'Saldo líquido', value: formatCurrency(filteredBalance) },
+                      sections: [
+                        {
+                          headers: ['Centro de custo', 'Total pago', 'Total recebido', 'Saldo líquido'],
+                          rows: weeklyGroups.map((group) => [
+                            group.bank_account,
+                            formatCurrency(group.total_paid),
+                            formatCurrency(group.total_received),
+                            formatCurrency(group.net_balance),
+                          ]),
+                          amountColumns: [1, 2, 3],
+                          labelBold: true,
+                        },
+                      ],
+                      totalColumns: 4,
+                      totalRows: [
+                        {
+                          label: 'Total geral',
+                          values: [
+                            formatCurrency(filteredPaid),
+                            formatCurrency(filteredReceived),
+                            formatCurrency(filteredBalance),
+                          ],
+                          variant: 'total-grand',
+                        },
                       ],
                     }),
                   )
@@ -1089,13 +1107,21 @@ function BankAccountSection() {
                             formatCurrency(row.balance),
                           ]),
                           amountColumns: [1, 2, 3, 4],
+                          labelBold: true,
                         },
                       ],
-                      summary: [
-                        { label: 'Saldo inicial total', value: formatCurrency(grandTotals.initial) },
-                        { label: 'Entradas totais', value: formatCurrency(grandTotals.income) },
-                        { label: 'Saídas totais', value: formatCurrency(grandTotals.expense) },
-                        { label: 'Saldo total', value: formatCurrency(grandTotals.balance) },
+                      totalColumns: 5,
+                      totalRows: [
+                        {
+                          label: 'Total geral',
+                          values: [
+                            formatCurrency(grandTotals.initial),
+                            formatCurrency(grandTotals.income),
+                            formatCurrency(grandTotals.expense),
+                            formatCurrency(grandTotals.balance),
+                          ],
+                          variant: 'total-grand',
+                        },
                       ],
                     }),
                   )
@@ -1291,12 +1317,20 @@ function CashFlowSection() {
                             formatCurrency(group.expected_final_balance),
                           ]),
                           amountColumns: [1, 2, 3],
+                          labelBold: true,
                         },
                       ],
-                      summary: [
-                        { label: 'Resultado realizado', value: formatCurrency(filteredComparative.realized_net) },
-                        { label: 'Resultado projetado', value: formatCurrency(filteredComparative.projected_net) },
-                        { label: 'Saldo final esperado', value: formatCurrency(filteredComparative.expected_final_balance) },
+                      totalColumns: 4,
+                      totalRows: [
+                        {
+                          label: 'Total geral',
+                          values: [
+                            formatCurrency(filteredComparative.realized_net),
+                            formatCurrency(filteredComparative.projected_net),
+                            formatCurrency(filteredComparative.expected_final_balance),
+                          ],
+                          variant: 'total-grand',
+                        },
                       ],
                     }),
                   )

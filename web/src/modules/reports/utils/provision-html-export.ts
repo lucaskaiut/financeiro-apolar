@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate } from '@/shared/utils/format'
+import { formatCurrency } from '@/shared/utils/format'
 import { escapeHtml } from '@/shared/utils/report-export'
 import type { ProvisionReport } from '../services/reports.service'
 import { formatProvisionAmount } from './provision-format'
@@ -8,7 +8,7 @@ function cell(value: number | null | undefined): string {
 }
 
 function columnHeaderRow(headers: string[]): string {
-  return `<tr class="column-header">${headers
+  return `<tr class="column-header-muted">${headers
     .map(
       (header, index) =>
         `<th class="${index === 0 ? '' : 'amount'}">${escapeHtml(header)}</th>`,
@@ -50,9 +50,7 @@ export function buildProvisionMatrixHtml(data: ProvisionReport, title: string, s
     sections.push(`<tr class="spacer"><td colspan="${headers.length}"></td></tr>`)
   }
 
-  sections.push(
-    `<tr class="section-banner"><td colspan="${headers.length}">Total geral</td></tr>`,
-  )
+  sections.push(`<tr class="section-banner"><td colspan="${headers.length}">TOTAL GERAL</td></tr>`)
   sections.push(columnHeaderRow(headers))
 
   const grandCells = [
@@ -62,7 +60,7 @@ export function buildProvisionMatrixHtml(data: ProvisionReport, title: string, s
   ]
 
   sections.push(
-    `<tr class="total-row">${grandCells
+    `<tr class="total-row-grand">${grandCells
       .map((value, index) => `<td class="${index === 0 ? '' : 'amount'}">${value}</td>`)
       .join('')}</tr>`,
   )
@@ -72,19 +70,16 @@ export function buildProvisionMatrixHtml(data: ProvisionReport, title: string, s
     .map((line) => line.trim())
     .filter(Boolean)
 
+  const summaryLine = `Total a receber: ${formatCurrency(data.total_in)} | Total a pagar: ${formatCurrency(data.total_out)} | Saldo líquido: ${formatCurrency(data.grand_total.total)}`
+
   return `
     <h1 class="report-title">${escapeHtml(title)}</h1>
     ${subtitleLines.map((line) => `<p class="report-subtitle">${escapeHtml(line)}</p>`).join('')}
+    <p class="report-summary-line">${escapeHtml(summaryLine)}</p>
     <table class="report-table">
       <tbody>
         ${sections.join('')}
       </tbody>
     </table>
-    <div class="report-summary">
-      <div class="report-summary-row"><span>Total a receber</span><strong>${escapeHtml(formatCurrency(data.total_in))}</strong></div>
-      <div class="report-summary-row"><span>Total a pagar</span><strong>${escapeHtml(formatCurrency(data.total_out))}</strong></div>
-      <div class="report-summary-row"><span>Saldo líquido do período</span><strong>${escapeHtml(formatCurrency(data.grand_total.total))}</strong></div>
-      <div class="report-summary-row"><span>Gerado em</span><span>${escapeHtml(formatDate(new Date().toISOString()))}</span></div>
-    </div>
   `
 }
