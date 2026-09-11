@@ -53,12 +53,36 @@ class ReconciliationController extends ApiController
         ]);
     }
 
+    public function identify(Request $request): JsonResponse
+    {
+        $matches = $this->service->identify(
+            $request->string('bank_account_id')->toString() ?: null,
+            $request->string('from')->toString() ?: null,
+            $request->string('to')->toString() ?: null,
+        );
+
+        $data = [];
+
+        foreach ($matches as $transactionId => $candidates) {
+            $data[$transactionId] = AccountResource::collection($candidates);
+        }
+
+        return $this->success($data);
+    }
+
     public function import(ImportOfxRequest $request): JsonResponse
     {
-        $result = $this->service->import(
-            $request->string('bank_account_id')->toString(),
-            $request->string('content')->toString(),
-        );
+        if ($request->hasFile('file')) {
+            $result = $this->service->importSpreadsheet(
+                $request->string('bank_account_id')->toString(),
+                (string) $request->file('file')?->getRealPath(),
+            );
+        } else {
+            $result = $this->service->import(
+                $request->string('bank_account_id')->toString(),
+                $request->string('content')->toString(),
+            );
+        }
 
         $this->audit->recordEntity(
             $request->user(),
@@ -68,7 +92,7 @@ class ReconciliationController extends ApiController
             ['imported' => $result['imported']],
         );
 
-        return $this->success($result, 'Importação OFX concluída.');
+        return $this->success($result, 'Importação do extrato concluída.');
     }
 
     public function autoReconcile(Request $request): JsonResponse

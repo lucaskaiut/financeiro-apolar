@@ -19,6 +19,13 @@ export function useCandidates(id: string | undefined, from?: string, to?: string
   })
 }
 
+export function useIdentify(params: { bank_account_id?: string; from?: string; to?: string }) {
+  return useQuery({
+    queryKey: queryKeys.reconciliation.identify(params),
+    queryFn: () => reconciliationService.identify(params),
+  })
+}
+
 function invalidate(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.reconciliation.all })
   queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
@@ -32,6 +39,19 @@ export function useImportOfx() {
   return useMutation({
     mutationFn: ({ bankAccountId, content }: { bankAccountId: string; content: string }) =>
       reconciliationService.importOfx(bankAccountId, content),
+    onSuccess: (result) => {
+      invalidate(queryClient)
+      toast.success('Importação concluída', `${result.imported} transações importadas.`)
+    },
+  })
+}
+
+export function useImportStatement() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ bankAccountId, file }: { bankAccountId: string; file: File }) =>
+      reconciliationService.importStatement(bankAccountId, file),
     onSuccess: (result) => {
       invalidate(queryClient)
       toast.success('Importação concluída', `${result.imported} transações importadas.`)

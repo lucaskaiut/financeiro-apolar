@@ -24,7 +24,8 @@ class ImportOfxRequest extends FormRequest
                 'string',
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
-            'content' => ['required', 'string', 'min:1'],
+            'content' => ['nullable', 'string', 'min:1', 'required_without:file'],
+            'file' => ['nullable', 'file', 'mimes:ofx,xml,xls,xlsx', 'max:20480', 'required_without:content'],
         ];
     }
 }

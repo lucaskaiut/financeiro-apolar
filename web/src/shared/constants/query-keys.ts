@@ -74,6 +74,8 @@ export const queryKeys = {
     all: ['reconciliation'] as const,
     list: (params: ListParams & { status?: string; bank_account_id?: string }) =>
       ['reconciliation', 'transactions', params] as const,
+    identify: (params: { bank_account_id?: string; from?: string; to?: string }) =>
+      ['reconciliation', 'identify', params] as const,
     candidates: (id: string, from?: string, to?: string, exact?: boolean) =>
       ['reconciliation', 'candidates', id, { from, to, exact }] as const,
   },

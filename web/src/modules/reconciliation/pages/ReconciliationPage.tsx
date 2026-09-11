@@ -25,12 +25,15 @@ import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAcco
 import type { BankTransaction } from '@/shared/types/models'
 import {
   useAutoReconcile,
+  useIdentify,
   useIgnoreTransaction,
   useImportOfx,
+  useImportStatement,
   useReconciliationQuery,
   useUndoReconciliation,
 } from '../hooks/useReconciliation'
 import { MatchDialog } from '../components/MatchDialog'
+import { IdentifyDialog } from '../components/IdentifyDialog'
 
 const PER_PAGE = 10
 
@@ -49,6 +52,7 @@ export default function ReconciliationPage() {
 
   const bankAccounts = useBankAccountOptions()
   const importOfx = useImportOfx()
+  const importStatement = useImportStatement()
   const autoReconcile = useAutoReconcile()
   const ignore = useIgnoreTransaction()
   const undo = useUndoReconciliation()
@@ -58,6 +62,7 @@ export default function ReconciliationPage() {
   const [to, setTo] = useState('')
   const [fileName, setFileName] = useState('')
   const [matching, setMatching] = useState<BankTransaction | null>(null)
+  const [identifyTarget, setIdentifyTarget] = useState<BankTransaction | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const query = useReconciliationQuery({
@@ -65,6 +70,8 @@ export default function ReconciliationPage() {
     per_page: PER_PAGE,
     status: statusFilter || undefined,
   })
+
+  const identify = useIdentify({ from: from || undefined, to: to || undefined })
 
   const setStatusFilter = (status: string) => {
     setSearchParams((params) => {
@@ -85,8 +92,16 @@ export default function ReconciliationPage() {
     }
 
     setFileName(file.name)
-    const content = await file.text()
-    await importOfx.mutateAsync({ bankAccountId, content })
+
+    const isSheet = /\.(xls|xlsx)$/i.test(file.name)
+
+    if (isSheet) {
+      await importStatement.mutateAsync({ bankAccountId, file })
+    } else {
+      const content = await file.text()
+      await importOfx.mutateAsync({ bankAccountId, content })
+    }
+
     if (fileRef.current) fileRef.current.value = ''
   }
 
@@ -104,7 +119,29 @@ export default function ReconciliationPage() {
     {
       key: 'description',
       header: 'Histórico',
-      render: (t) => <span className="text-foreground">{t.description ?? '—'}</span>,
+      render: (t) => {
+        const candidates = t.status === 'pending' ? (identify.data?.[t.id] ?? []) : []
+
+        return (
+          <div className="flex flex-col gap-1">
+            <span className="text-foreground">{t.description ?? '—'}</span>
+            {candidates.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIdentifyTarget(t)}
+                className="self-start"
+                aria-label="Ver contas identificadas"
+              >
+                {candidates.length === 1 ? (
+                  <Badge variant="success">Identificada: {candidates[0].description}</Badge>
+                ) : (
+                  <Badge variant="warning">Ambígua ({candidates.length})</Badge>
+                )}
+              </button>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'value',
@@ -153,7 +190,7 @@ export default function ReconciliationPage() {
     <Page>
       <PageHeader
         title="Conciliação bancária"
-        description="Importe extratos OFX e concilie com os lançamentos."
+        description="Importe extratos OFX ou planilhas (XLS/XLSX) e concilie com os lançamentos."
         breadcrumb={[{ label: 'Dashboard', to: '/dashboard' }, { label: 'Conciliação' }]}
       />
 
@@ -171,11 +208,11 @@ export default function ReconciliationPage() {
               />
             </div>
             <div className="min-w-56 flex-1">
-              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Arquivo OFX</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-foreground">Arquivo do extrato</label>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".ofx,.xml"
+                accept=".ofx,.xml,.xls,.xlsx"
                 onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                 className="hidden"
                 id="ofx-file"
@@ -230,11 +267,11 @@ export default function ReconciliationPage() {
             <EmptyState
               icon={FileUp}
               title="Nenhuma transação"
-              description="Importe um extrato OFX para começar a conciliação."
+              description="Importe um extrato OFX ou planilha para começar a conciliação."
               action={
                 <Button variant="secondary" onClick={() => fileRef.current?.click()}>
                   <Landmark className="size-4" />
-                  Importar OFX
+                  Importar extrato
                 </Button>
               }
             />
@@ -245,6 +282,13 @@ export default function ReconciliationPage() {
       </PageContent>
 
       <MatchDialog transaction={matching} from={from} to={to} open={matching !== null} onClose={() => setMatching(null)} />
+
+      <IdentifyDialog
+        transaction={identifyTarget}
+        accounts={identifyTarget ? (identify.data?.[identifyTarget.id] ?? []) : []}
+        open={identifyTarget !== null}
+        onClose={() => setIdentifyTarget(null)}
+      />
     </Page>
   )
 }

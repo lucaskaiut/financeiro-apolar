@@ -25,11 +25,33 @@ export const reconciliationService = {
     return response.data.data
   },
 
+  async importStatement(
+    bank_account_id: string,
+    file: File,
+  ): Promise<{ imported: number; skipped: number }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('bank_account_id', bank_account_id)
+
+    const response = await http.post<ApiResponse<{ imported: number; skipped: number }>>(
+      '/reconciliation/import',
+      formData,
+    )
+
+    return response.data.data
+  },
+
   async auto(from?: string, to?: string): Promise<{ matched: number; ambiguous: number; not_found: number }> {
     const response = await http.post<ApiResponse<{ matched: number; ambiguous: number; not_found: number }>>(
       '/reconciliation/auto',
       { from, to },
     )
+
+    return response.data.data
+  },
+
+  async identify(params?: { bank_account_id?: string; from?: string; to?: string }): Promise<Record<string, Account[]>> {
+    const response = await http.get<ApiResponse<Record<string, Account[]>>>('/reconciliation/identify', { params })
 
     return response.data.data
   },

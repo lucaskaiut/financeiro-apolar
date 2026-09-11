@@ -9,6 +9,7 @@ use App\Modules\Account\Services\AccountService;
 use App\Modules\Reconciliation\Models\BankTransaction;
 use App\Modules\Reconciliation\Models\Reconciliation;
 use App\Modules\Reconciliation\Support\OfxParser;
+use App\Modules\Reconciliation\Support\StatementSheetParser;
 use App\Modules\User\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,6 +20,7 @@ class ReconciliationService
 {
     public function __construct(
         private readonly OfxParser $parser,
+        private readonly StatementSheetParser $sheetParser,
         private readonly AccountService $accounts,
     ) {}
 
@@ -27,12 +29,29 @@ class ReconciliationService
      */
     public function import(string $bankAccountId, string $content): array
     {
-        $raw = $this->parser->parse($content);
+        return $this->persist($this->parser->parse($content), $bankAccountId);
+    }
 
+    /**
+     * Importa um extrato em planilha (XLS/XLSX).
+     *
+     * @return array{imported: int, skipped: int}
+     */
+    public function importSpreadsheet(string $bankAccountId, string $path): array
+    {
+        return $this->persist($this->sheetParser->parse($path), $bankAccountId);
+    }
+
+    /**
+     * @param  list<array{type: string, date: ?string, value: float, description: ?string, transaction_id: ?string}>  $items
+     * @return array{imported: int, skipped: int}
+     */
+    private function persist(array $items, string $bankAccountId): array
+    {
         $imported = 0;
         $skipped = 0;
 
-        foreach ($raw as $item) {
+        foreach ($items as $item) {
             $exists = filled($item['transaction_id'])
                 && BankTransaction::query()->where('transaction_id', $item['transaction_id'])->exists();
 
@@ -103,6 +122,30 @@ class ReconciliationService
         }
 
         return ['matched' => $matched, 'ambiguous' => $ambiguous, 'not_found' => $notFound];
+    }
+
+    /**
+     * Identifica, para cada transação pendente, os lançamentos que seriam vinculados
+     * pela conciliação automática (valor exato), sem efetivar a conciliação.
+     *
+     * @return array<string, Collection<int, FinancialAccount>>
+     */
+    public function identify(?string $bankAccountId = null, ?string $from = null, ?string $to = null): array
+    {
+        $pending = BankTransaction::query()
+            ->where('status', 'pending')
+            ->when($bankAccountId, fn ($q) => $q->where('bank_account_id', $bankAccountId))
+            ->orderByDesc('date')
+            ->orderByDesc('id')
+            ->get();
+
+        $result = [];
+
+        foreach ($pending as $transaction) {
+            $result[$transaction->uuid] = $this->candidates($transaction, $from, $to, exactValue: true);
+        }
+
+        return $result;
     }
 
     /**
