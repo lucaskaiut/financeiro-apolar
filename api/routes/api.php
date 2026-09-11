@@ -78,6 +78,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::delete('credit-cards/{credit_card}', [CreditCardController::class, 'destroy'])->middleware('permission:credit_cards.delete');
     Route::post('credit-cards/{credit_card}/purchases', [CreditCardController::class, 'storePurchase'])->middleware('permission:credit_cards.update');
     Route::post('credit-cards/{credit_card}/invoices/close', [CreditCardController::class, 'closeInvoice'])->middleware('permission:credit_cards.update');
+    Route::post('credit-cards/{credit_card}/invoices/import', [CreditCardController::class, 'importInvoice'])->middleware('permission:credit_cards.update');
     Route::get('credit-cards/{credit_card}/invoices', [CreditCardController::class, 'invoices'])->middleware('permission:credit_cards.view');
 
     Route::get('categories', [CategoryController::class, 'index'])->middleware('permission:categories.view');
@@ -115,6 +116,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::get('cash-flow/projected', [CashFlowController::class, 'projected'])->middleware('permission:cash_flow.view');
 
     Route::get('reconciliation/transactions', [ReconciliationController::class, 'index'])->middleware('permission:reconciliation.view');
+    Route::get('reconciliation/identify', [ReconciliationController::class, 'identify'])->middleware('permission:reconciliation.view');
     Route::post('reconciliation/import', [ReconciliationController::class, 'import'])->middleware('permission:reconciliation.execute');
     Route::post('reconciliation/auto', [ReconciliationController::class, 'autoReconcile'])->middleware('permission:reconciliation.execute');
     Route::post('reconciliation/reconcile-many', [ReconciliationController::class, 'reconcileMany'])->middleware('permission:reconciliation.execute');

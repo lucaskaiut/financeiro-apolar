@@ -4,12 +4,17 @@ namespace Tests\Feature\Finance;
 
 use App\Modules\Account\Enums\AccountStatus;
 use App\Modules\Account\Models\FinancialAccount;
+use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\Report\Services\ReportService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xls;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\Concerns\InteractsWithTenants;
 use Tests\TestCase;
 
@@ -746,6 +751,252 @@ OFX;
         $this->postJson("/api/reconciliation/transactions/{$transactionId}/undo")->assertOk();
 
         $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->assertJsonPath('meta.total', 1);
+    }
+
+    public function test_reconciliation_identify_returns_linked_accounts(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Internet',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 200,
+            'due_date' => '2026-08-10',
+            'purchase_date' => '2026-08-10',
+        ])->assertCreated();
+
+        $ofx = <<<'OFX'
+OFXHEADER:100
+DATA:OFXSGML
+VERSION:102
+<OFX>
+  <BANKMSGSRSV1>
+    <STMTTRNRS>
+      <STMTRS>
+        <BANKTRANLIST>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260810</DTPOSTED>
+            <TRNAMT>-200.00</TRNAMT>
+            <FITID>FIT-IDENT-001</FITID>
+            <MEMO>INTERNET</MEMO>
+          </STMTTRN>
+          <STMTTRN>
+            <TRNTYPE>DEBIT</TRNTYPE>
+            <DTPOSTED>20260811</DTPOSTED>
+            <TRNAMT>-500.00</TRNAMT>
+            <FITID>FIT-IDENT-002</FITID>
+            <MEMO>MANUTENCAO</MEMO>
+          </STMTTRN>
+        </BANKTRANLIST>
+      </STMTRS>
+    </STMTTRNRS>
+  </BANKMSGSRSV1>
+</OFX>
+OFX;
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'content' => $ofx,
+        ])->assertOk()->assertJsonPath('data.imported', 2);
+
+        $transactions = collect($this->getJson('/api/reconciliation/transactions?status=pending')->assertOk()->json('data'))
+            ->keyBy('description');
+
+        $identified = $this->getJson('/api/reconciliation/identify')->assertOk()->json('data');
+
+        $this->assertCount(2, $identified);
+
+        $internetTx = $transactions['INTERNET'];
+        $manutTx = $transactions['MANUTENCAO'];
+
+        $this->assertCount(1, $identified[$internetTx['id']]);
+        $this->assertEquals('Internet', $identified[$internetTx['id']][0]['description']);
+
+        $this->assertCount(0, $identified[$manutTx['id']]);
+    }
+
+    public function test_reconciliation_spreadsheet_import(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+
+        $path = $this->buildBradescoStatement();
+
+        $file = new UploadedFile($path, 'Bradesco_10092026_192443.XLS', 'application/vnd.ms-excel', null, true);
+
+        $this->postJson('/api/reconciliation/import', [
+            'bank_account_id' => $bankAccountId,
+            'file' => $file,
+        ])->assertOk()->assertJsonPath('data.imported', 3);
+
+        $transactions = $this->getJson('/api/reconciliation/transactions?status=pending')->assertOk();
+
+        $transactions->assertJsonPath('meta.total', 3);
+
+        $data = collect($transactions->json('data'));
+
+        $credit = $data->firstWhere('type', 'credit');
+        $this->assertEquals('RENTAB.INVEST FACILCRED*', $credit['description']);
+        $this->assertEquals(0.33, $credit['value']);
+
+        $zap = $data->firstWhere('description', 'PAGTO ELETRON COBRANCA ZAP');
+        $this->assertEquals('debit', $zap['type']);
+        $this->assertEquals(2325.93, $zap['value']);
+
+        $pix = $data->firstWhere('description', 'PIX ENVIADO DES: FULANO');
+        $this->assertEquals('debit', $pix['type']);
+        $this->assertEquals(2000.0, $pix['value']);
+    }
+
+    private function buildBradescoStatement(): string
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheet->fromArray([
+            ['', 'Bradesco Net Empresa', '', '', '', ''],
+            ['Data', 'Lançamento', 'Dcto.', 'Crédito (R$)', 'Débito (R$)', 'Saldo (R$)'],
+            ['01/09/2026', 'SALDO ANTERIOR', '', '', '', '32.381,23'],
+            ['09/09/2026', 'RENTAB.INVEST FACILCRED*', '2130727', '0,33', '', '32.381,56'],
+            ['09/09/2026', 'PAGTO ELETRON COBRANCA ZAP', '909', '', '-2.325,93', '30.055,79'],
+            ['10/09/2026', 'PIX ENVIADO DES: FULANO', '1626180', '', '-2.000,00', '27.816,88'],
+            ['Total', '', '', '0,33', '-4.325,93', ''],
+        ], null);
+
+        $writer = new Xls($spreadsheet);
+        $path = tempnam(sys_get_temp_dir(), 'extrato_').'.xls';
+        $writer->save($path);
+
+        return $path;
+    }
+
+    public function test_credit_card_invoice_import_full_flow(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $costCenterId = $this->createCostCenter();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Mastercard Black',
+            'institution' => 'Itaú',
+            'closing_day' => 10,
+            'due_day' => 15,
+            'bank_account_id' => $bankAccountId,
+        ])->assertCreated()->json('data.id');
+
+        $path = $this->buildCardStatement();
+
+        $file = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+            'file' => $file,
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'cost_center_id' => $costCenterId,
+        ])->assertOk();
+
+        $response->assertJsonPath('data.imported', 2);
+        $response->assertJsonPath('data.skipped', 1);
+        $response->assertJsonPath('data.total', 300.5);
+
+        $invoice = CreditCardInvoice::query()->first();
+
+        $this->assertNotNull($invoice);
+        $this->assertEquals('2026-09', $invoice->reference_month);
+        $this->assertEquals('paid', $invoice->status->value);
+        $this->assertEquals(300.5, (float) $invoice->total_value);
+
+        $payable = FinancialAccount::query()->find($invoice->financial_account_id);
+        $this->assertEquals(AccountStatus::Settled, $payable->status);
+        $this->assertEquals($bankAccountId, $payable->bank_account_id);
+
+        $purchases = FinancialAccount::query()
+            ->where('credit_card_invoice_id', $invoice->uuid)
+            ->get();
+
+        $this->assertCount(2, $purchases);
+        $this->assertTrue($purchases->every(fn (FinancialAccount $purchase) => $purchase->status === AccountStatus::Settled));
+        $this->assertTrue($purchases->every(fn (FinancialAccount $purchase) => $purchase->category_id === $categoryId));
+        $this->assertTrue($purchases->every(fn (FinancialAccount $purchase) => $purchase->cost_center_id === $costCenterId));
+
+        $this->getJson("/api/credit-cards/{$cardId}/invoices")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', 'paid');
+    }
+
+    public function test_credit_card_invoice_import_aborts_when_invoice_exists(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Visa Gold',
+            'closing_day' => 10,
+            'due_day' => 15,
+            'bank_account_id' => $bankAccountId,
+        ])->assertCreated()->json('data.id');
+
+        $path = $this->buildCardStatement();
+        $file = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $payload = [
+            'file' => $file,
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+        ];
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/import", $payload)->assertOk();
+
+        $secondFile = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+        $payload['file'] = $secondFile;
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/import", $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('reference_month');
+    }
+
+    private function buildCardStatement(): string
+    {
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $dateA = ExcelDate::dateTimeToExcel(new \DateTime('2026-08-28'));
+        $dateB = ExcelDate::dateTimeToExcel(new \DateTime('2026-08-27'));
+
+        $sheet->fromArray([
+            ['Fatura Fechada - Setembro/2026'],
+            ['Data', 'Lançamento', 'Parcelamento', 'Valor'],
+            [$dateA, 'Compra A', '', 100.5],
+            [$dateB, 'Compra B', 'Parcela 1 de 3', 200],
+            [$dateB, 'Compra B', 'Parcela 2 de 3', 200],
+            [$dateA, 'Pagamento Efetuado', '', -500],
+        ], null);
+
+        $writer = new Xlsx($spreadsheet);
+        $path = tempnam(sys_get_temp_dir(), 'fatura_').'.xlsx';
+        $writer->save($path);
+
+        return $path;
     }
 
     public function test_reconciliation_one_transaction_to_many_accounts_and_undo(): void
