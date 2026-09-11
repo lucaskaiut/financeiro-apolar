@@ -87,3 +87,26 @@ export function useCloseInvoice(cardId: string) {
     },
   })
 }
+
+export function useImportInvoice(cardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: {
+      file: File
+      reference_month: string
+      paid_date: string
+      bank_account_id: string
+      category_id: string
+      cost_center_id?: string | null
+    }) => creditCardsService.importInvoice(cardId, payload),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
+      toast.success(
+        'Fatura importada',
+        `${result.imported} compras importadas, ${result.skipped} ignoradas. Fatura fechada e liquidada.`,
+      )
+    },
+  })
+}

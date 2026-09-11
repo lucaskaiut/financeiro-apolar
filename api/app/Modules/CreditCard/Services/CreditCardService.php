@@ -22,6 +22,7 @@ class CreditCardService
     public function __construct(
         private readonly AllocationService $allocations,
     ) {}
+
     public function paginate(int $perPage = 15, ?string $search = null): LengthAwarePaginator
     {
         return CreditCard::query()
@@ -180,9 +181,19 @@ class CreditCardService
         return $accounts;
     }
 
-    public function closeInvoice(CreditCard $creditCard, string $referenceMonth): CreditCardInvoice
+    /**
+     * Vencimento da fatura para um mês de referência, conforme fechamento/vence do cartão.
+     */
+    public function invoiceDueDate(CreditCard $creditCard, string $referenceMonth): Carbon
     {
-        return DB::transaction(function () use ($creditCard, $referenceMonth): CreditCardInvoice {
+        [, $dueDate] = $this->resolveInvoiceDates($creditCard, $referenceMonth);
+
+        return $dueDate;
+    }
+
+    public function closeInvoice(CreditCard $creditCard, string $referenceMonth, ?string $bankAccountId = null): CreditCardInvoice
+    {
+        return DB::transaction(function () use ($creditCard, $referenceMonth, $bankAccountId): CreditCardInvoice {
             $existing = CreditCardInvoice::query()
                 ->where('credit_card_id', $creditCard->uuid)
                 ->where('reference_month', $referenceMonth)
@@ -218,7 +229,7 @@ class CreditCardService
                 'type' => AccountType::Payable,
                 'description' => "Fatura {$creditCard->name} — {$referenceMonth}",
                 'counterparty' => $creditCard->institution ?? $creditCard->name,
-                'bank_account_id' => $creditCard->bank_account_id,
+                'bank_account_id' => $bankAccountId ?? $creditCard->bank_account_id,
                 'credit_card_id' => $creditCard->uuid,
                 'value' => $total,
                 'due_date' => $dueDate,

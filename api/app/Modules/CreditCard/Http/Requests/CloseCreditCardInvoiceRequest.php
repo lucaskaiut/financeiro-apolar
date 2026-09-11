@@ -3,7 +3,6 @@
 namespace App\Modules\CreditCard\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class CloseCreditCardInvoiceRequest extends FormRequest
 {

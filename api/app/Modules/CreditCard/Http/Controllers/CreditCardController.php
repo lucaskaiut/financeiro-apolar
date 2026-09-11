@@ -5,6 +5,7 @@ namespace App\Modules\CreditCard\Http\Controllers;
 use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\CreditCard\Http\Requests\CloseCreditCardInvoiceRequest;
+use App\Modules\CreditCard\Http\Requests\ImportCreditCardInvoiceRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardPurchaseRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardRequest;
 use App\Modules\CreditCard\Http\Requests\UpdateCreditCardRequest;
@@ -13,14 +14,17 @@ use App\Modules\CreditCard\Http\Resources\CreditCardResource;
 use App\Modules\CreditCard\Models\CreditCard;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\CreditCard\Services\CreditCardService;
+use App\Modules\CreditCard\Services\InvoiceImportService;
 use App\Modules\Shared\Http\Controllers\ApiController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class CreditCardController extends ApiController
 {
     public function __construct(
         private readonly CreditCardService $service,
+        private readonly InvoiceImportService $imports,
         private readonly AuditLogService $audit,
     ) {}
 
@@ -108,6 +112,55 @@ class CreditCardController extends ApiController
         $invoice = $this->service->closeInvoice($creditCard, $request->validated('reference_month'));
 
         return $this->success(CreditCardInvoiceResource::make($invoice), 'Fatura fechada com sucesso.');
+    }
+
+    public function importInvoice(ImportCreditCardInvoiceRequest $request, CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        $referenceMonth = $request->validated('reference_month');
+
+        $exists = CreditCardInvoice::query()
+            ->where('credit_card_id', $creditCard->uuid)
+            ->where('reference_month', $referenceMonth)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'reference_month' => ['Já existe uma fatura para este cartão e mês de referência.'],
+            ]);
+        }
+
+        try {
+            $result = $this->imports->import(
+                $creditCard,
+                $referenceMonth,
+                $request->validated('bank_account_id'),
+                $request->validated('category_id'),
+                $request->validated('cost_center_id'),
+                $request->validated('paid_date'),
+                (string) $request->file('file')?->getRealPath(),
+                $request->user(),
+            );
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['file' => [$e->getMessage()]]);
+        }
+
+        $this->audit->recordEntity(
+            $request->user(),
+            AuditAction::FinancialCreate,
+            'credit_card_invoice',
+            $result['invoice_id'],
+            [
+                'reference_month' => $referenceMonth,
+                'imported' => $result['imported'],
+                'skipped' => $result['skipped'],
+                'total' => $result['total'],
+                'paid_date' => $request->validated('paid_date'),
+            ],
+        );
+
+        return $this->success($result, 'Fatura importada e liquidada com sucesso.');
     }
 
     public function invoices(CreditCard $creditCard): JsonResponse

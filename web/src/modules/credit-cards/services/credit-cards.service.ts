@@ -54,4 +54,31 @@ export const creditCardsService = {
 
     return response.data.data
   },
+
+  async importInvoice(
+    id: string,
+    payload: {
+      file: File
+      reference_month: string
+      paid_date: string
+      bank_account_id: string
+      category_id: string
+      cost_center_id?: string | null
+    },
+  ): Promise<{ imported: number; skipped: number; total: number; invoice_id: string }> {
+    const formData = new FormData()
+    formData.append('file', payload.file)
+    formData.append('reference_month', payload.reference_month)
+    formData.append('paid_date', payload.paid_date)
+    formData.append('bank_account_id', payload.bank_account_id)
+    formData.append('category_id', payload.category_id)
+    if (payload.cost_center_id) formData.append('cost_center_id', payload.cost_center_id)
+
+    const response = await http.post<ApiResponse<{ imported: number; skipped: number; total: number; invoice_id: string }>>(
+      `/credit-cards/${id}/invoices/import`,
+      formData,
+    )
+
+    return response.data.data
+  },
 }

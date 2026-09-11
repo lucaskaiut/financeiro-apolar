@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router'
-import { CreditCard, FileText } from 'lucide-react'
+import { CreditCard, FileText, Upload } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -24,11 +24,13 @@ import {
   useCreditCardInvoices,
   useCreditCardQuery,
 } from '../hooks/useCreditCards'
+import { ImportInvoiceDialog } from '../components/ImportInvoiceDialog'
 
 export default function CreditCardDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [referenceMonth, setReferenceMonth] = useState('')
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const cardQuery = useCreditCardQuery(id)
   const invoicesQuery = useCreditCardInvoices(id)
@@ -201,6 +203,10 @@ export default function CreditCardDetailPage() {
                     >
                       Fechar fatura
                     </Button>
+                    <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                      <Upload className="size-4" />
+                      Importar fatura
+                    </Button>
                   </div>
                 </Can>
               </div>
@@ -249,6 +255,8 @@ export default function CreditCardDetailPage() {
           </Card>
         )}
       </PageContent>
+
+      <ImportInvoiceDialog cardId={id ?? ''} open={importOpen} onClose={() => setImportOpen(false)} />
     </Page>
   )
 }
