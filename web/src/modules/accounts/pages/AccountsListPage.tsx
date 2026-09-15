@@ -18,6 +18,7 @@ import {
   SearchInput,
   SegmentedControl,
   Select,
+  Tooltip,
   type Column,
 } from '@/shared/design-system'
 import { Can } from '@/app/guards/PermissionGuard'
@@ -281,33 +282,43 @@ export default function AccountsListPage() {
           {a.status === 'settled' && a.settlements?.length && can(Permission.ACCOUNTS_SETTLE) && (
             <UnsettleButton account={a} />
           )}
-          {(a.status === 'open' || a.status === 'partial')
-            && !a.is_card_purchase
-            && can(Permission.ACCOUNTS_SETTLE) && (
-            <Button variant="ghost" size="sm" onClick={() => setToSettle(a)} aria-label={`Baixar ${a.description}`} className="text-success hover:bg-success-soft hover:text-success">
-              <CheckCircle2 className="size-4" />
-            </Button>
-          )}
-          {can(Permission.ACCOUNTS_CREATE) && (
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/create?clone=${a.id}`)} aria-label={`Clonar ${a.description}`}>
-              <Copy className="size-4" />
-            </Button>
-          )}
-          {can(Permission.ACCOUNTS_UPDATE) && (
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/${a.id}/edit`)} aria-label={`Editar ${a.description}`}>
-              <Pencil className="size-4" />
-            </Button>
-          )}
-          {can(Permission.ACCOUNTS_UPDATE) && (a.status === 'open' || a.status === 'partial') && (
-            <Button variant="ghost" size="sm" onClick={() => setToCancel(a)} aria-label={`Cancelar ${a.description}`} className="text-warning hover:bg-warning-soft hover:text-warning">
-              <XCircle className="size-4" />
-            </Button>
-          )}
-          {can(Permission.ACCOUNTS_DELETE) && (
-            <Button variant="ghost" size="sm" onClick={() => setToDelete(a)} aria-label={`Excluir ${a.description}`} className="text-danger hover:bg-danger-soft hover:text-danger">
-              <Trash2 className="size-4" />
-            </Button>
-          )}
+            {(a.status === 'open' || a.status === 'partial')
+              && !a.is_card_purchase
+              && can(Permission.ACCOUNTS_SETTLE) && (
+              <Tooltip label="Liquidar">
+                <Button variant="ghost" size="sm" onClick={() => setToSettle(a)} aria-label={`Baixar ${a.description}`} className="text-success hover:bg-success-soft hover:text-success">
+                  <CheckCircle2 className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
+            {can(Permission.ACCOUNTS_CREATE) && (
+              <Tooltip label="Clonar">
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/create?clone=${a.id}`)} aria-label={`Clonar ${a.description}`}>
+                  <Copy className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
+            {can(Permission.ACCOUNTS_UPDATE) && (
+              <Tooltip label="Editar">
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/${a.id}/edit`)} aria-label={`Editar ${a.description}`}>
+                  <Pencil className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
+            {can(Permission.ACCOUNTS_UPDATE) && (a.status === 'open' || a.status === 'partial') && (
+              <Tooltip label="Cancelar">
+                <Button variant="ghost" size="sm" onClick={() => setToCancel(a)} aria-label={`Cancelar ${a.description}`} className="text-warning hover:bg-warning-soft hover:text-warning">
+                  <XCircle className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
+            {can(Permission.ACCOUNTS_DELETE) && (
+              <Tooltip label="Excluir">
+                <Button variant="ghost" size="sm" onClick={() => setToDelete(a)} aria-label={`Excluir ${a.description}`} className="text-danger hover:bg-danger-soft hover:text-danger">
+                  <Trash2 className="size-4" />
+                </Button>
+              </Tooltip>
+            )}
         </div>
       ),
     },
@@ -526,17 +537,19 @@ function UnsettleButton({ account }: { account: Account }) {
   const unsettle = useUnsettleAccount(account.id)
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => {
-        const last = account.settlements?.[account.settlements.length - 1]
-        if (last) unsettle.mutate(last.id)
-      }}
-      aria-label={`Desfazer baixa de ${account.description}`}
-      className="text-warning hover:bg-warning-soft hover:text-warning"
-    >
-      <Undo2 className="size-4" />
-    </Button>
+    <Tooltip label="Desfazer baixa">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          const last = account.settlements?.[account.settlements.length - 1]
+          if (last) unsettle.mutate(last.id)
+        }}
+        aria-label={`Desfazer baixa de ${account.description}`}
+        className="text-warning hover:bg-warning-soft hover:text-warning"
+      >
+        <Undo2 className="size-4" />
+      </Button>
+    </Tooltip>
   )
 }
