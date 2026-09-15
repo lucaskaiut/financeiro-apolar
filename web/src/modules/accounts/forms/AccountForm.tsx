@@ -27,6 +27,7 @@ import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenter
 import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { accountSchema, type AccountFormValues } from '../schemas/account.schema'
 import { AllocationFields } from './AllocationFields'
+import { InstallmentItemsFields } from './InstallmentItemsFields'
 import type { AccountPayload } from '../services/accounts.service'
 import { PendingDocuments } from '../components/PendingDocuments'
 
@@ -70,6 +71,8 @@ export function AccountForm({
       installments: false,
       installment_quantity: '2',
       installment_interval: 'monthly',
+      customize_installments: false,
+      installment_items: [],
       split: false,
       allocations: [],
       ...defaultValues,
@@ -82,6 +85,7 @@ export function AccountForm({
 
   const type = form.watch('type')
   const installments = form.watch('installments')
+  const customizeInstallments = form.watch('customize_installments')
   const split = form.watch('split')
   const creditCardId = form.watch('credit_card_id')
   const usingCreditCard = mode === 'create' ? Boolean(creditCardId) : isCardPurchase
@@ -121,7 +125,16 @@ export function AccountForm({
         mode === 'create' && values.installments
           ? hasCreditCard
             ? { quantity: Number(values.installment_quantity) }
-            : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
+            : values.customize_installments
+              ? {
+                  quantity: Number(values.installment_quantity),
+                  interval: values.installment_interval,
+                  items: values.installment_items.map((line) => ({
+                    value: Number(line.value),
+                    due_date: line.due_date,
+                  })),
+                }
+              : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
           : null,
       allocations: values.split
         ? values.allocations
@@ -309,7 +322,7 @@ export function AccountForm({
               description={
                 usingCreditCard
                   ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma.'
-                  : 'Divida o valor em parcelas iguais.'
+                  : 'Divida o valor em parcelas iguais ou personalize cada parcela.'
               }
             >
               <SwitchField name="installments" label="Parcelar este lançamento" />
@@ -327,6 +340,16 @@ export function AccountForm({
                       ]}
                     />
                   )}
+                </div>
+              )}
+              {installments && !usingCreditCard && (
+                <div className="mt-4">
+                  <SwitchField
+                    name="customize_installments"
+                    label="Personalizar parcelas"
+                    hint="Defina o valor e o vencimento de cada parcela individualmente. A soma deve ser igual ao valor do lançamento."
+                  />
+                  {customizeInstallments && <InstallmentItemsFields />}
                 </div>
               )}
             </Section>

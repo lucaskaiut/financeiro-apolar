@@ -19,7 +19,7 @@ export interface AccountPayload {
   expected_date?: string | null
   paid_date?: string | null
   observation?: string | null
-  installments?: { quantity: number; interval?: 'daily' | 'weekly' | 'monthly' } | null
+  installments?: { quantity: number; interval?: 'daily' | 'weekly' | 'monthly'; items?: { value: number; due_date: string }[] } | null
   allocations?: AccountAllocationPayload[] | null
 }
 

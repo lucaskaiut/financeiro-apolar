@@ -21,6 +21,8 @@ export function accountToCloneFormValues(account: Account): Partial<AccountFormV
     installments: false,
     installment_quantity: '2',
     installment_interval: 'monthly',
+    customize_installments: false,
+    installment_items: [],
     split: account.allocation_mode === 'split',
     allocations:
       account.allocation_mode === 'split' && account.allocations && account.allocations.length > 0

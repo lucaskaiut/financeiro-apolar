@@ -141,6 +141,12 @@ class AccountService
             return $this->createCardPurchase($data, $installments, $allocations);
         }
 
+        $items = $installments['items'] ?? null;
+
+        if (is_array($items) && $items !== []) {
+            return $this->createCustomInstallments($data, $items, $allocations);
+        }
+
         if ($installments === null || (int) ($installments['quantity'] ?? 1) <= 1) {
             return [$this->persistAccount($data, $allocations)];
         }
@@ -260,6 +266,40 @@ class AccountService
             'weekly' => $first->copy()->addWeeks($step),
             default => $first->copy()->addMonthsNoOverflow($step),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  list<array{value?: numeric, due_date?: string}>  $items
+     * @param  list<array<string, mixed>>|null  $allocations
+     * @return list<FinancialAccount>
+     */
+    private function createCustomInstallments(array $data, array $items, ?array $allocations = null): array
+    {
+        $group = (string) Str::uuid();
+        $quantity = count($items);
+        $accounts = [];
+
+        $distributed = is_array($allocations) && $allocations !== []
+            ? $this->allocations->distributeAcross(
+                $allocations,
+                array_map(fn ($item) => round((float) $item['value'], 2), $items),
+            )
+            : array_fill(0, $quantity, $allocations);
+
+        foreach (array_values($items) as $index => $item) {
+            $accounts[] = $this->persistAccount([
+                ...$data,
+                'value' => round((float) $item['value'], 2),
+                'due_date' => DateOnly::normalize($item['due_date']),
+                'purchase_date' => DateOnly::normalize($data['purchase_date'] ?? null),
+                'installment_group_id' => $group,
+                'installment_number' => $index + 1,
+                'installment_total' => $quantity,
+            ], $distributed[$index] ?? null);
+        }
+
+        return $accounts;
     }
 
     /**

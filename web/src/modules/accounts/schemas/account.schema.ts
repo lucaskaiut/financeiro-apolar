@@ -14,6 +14,16 @@ export const emptyAllocationLine = (): AllocationLineValues => ({
   value: '',
 })
 
+export const installmentLineSchema = z.object({
+  value: z.string(),
+  due_date: z.string(),
+})
+
+export const emptyInstallmentLine = (): InstallmentLineValues => ({
+  value: '',
+  due_date: '',
+})
+
 export const accountSchema = z
   .object({
     type: z.enum(['payable', 'receivable']),
@@ -34,6 +44,8 @@ export const accountSchema = z
     installments: z.boolean(),
     installment_quantity: z.string().refine((v) => Number(v) >= 1 && Number(v) <= 120, 'Informe entre 1 e 120'),
     installment_interval: z.enum(['daily', 'weekly', 'monthly']),
+    customize_installments: z.boolean(),
+    installment_items: z.array(installmentLineSchema),
     split: z.boolean(),
     allocations: z.array(allocationLineSchema),
   })
@@ -100,7 +112,31 @@ export const accountSchema = z
     } else if (!data.category_id) {
       ctx.addIssue({ code: 'custom', path: ['category_id'], message: 'Selecione a categoria' })
     }
+
+    if (data.installments && data.customize_installments) {
+      data.installment_items.forEach((line, index) => {
+        if (!line.value || Number(line.value) <= 0) {
+          ctx.addIssue({ code: 'custom', path: ['installment_items', index, 'value'], message: 'Informe um valor maior que zero' })
+        }
+
+        if (!line.due_date) {
+          ctx.addIssue({ code: 'custom', path: ['installment_items', index, 'due_date'], message: 'Informe o vencimento' })
+        }
+      })
+
+      const sum = data.installment_items.reduce((total, line) => total + Number(line.value || 0), 0)
+      const value = Number(data.value)
+
+      if (value > 0 && Math.abs(sum - value) >= 0.01) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['installment_items'],
+          message: 'A soma dos valores das parcelas deve ser igual ao valor do lançamento.',
+        })
+      }
+    }
   })
 
 export type AccountFormValues = z.infer<typeof accountSchema>
 export type AllocationLineValues = z.infer<typeof allocationLineSchema>
+export type InstallmentLineValues = z.infer<typeof installmentLineSchema>

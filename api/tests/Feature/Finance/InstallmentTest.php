@@ -148,4 +148,66 @@ class InstallmentTest extends TestCase
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.description', 'Parcelamento do tenant B');
     }
+
+    public function test_it_creates_account_with_custom_installments(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Serviço parcelado personalizado',
+            'counterparty' => 'Fornecedor Y',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 1000,
+            'due_date' => '2026-01-10',
+            'installments' => [
+                'quantity' => 3,
+                'interval' => 'monthly',
+                'items' => [
+                    ['value' => 300, 'due_date' => '2026-01-10'],
+                    ['value' => 400, 'due_date' => '2026-03-05'],
+                    ['value' => 300, 'due_date' => '2026-05-20'],
+                ],
+            ],
+        ])->assertCreated();
+
+        $accounts = FinancialAccount::query()->orderBy('installment_number')->get();
+
+        $this->assertCount(3, $accounts);
+        $this->assertEquals([300.0, 400.0, 300.0], $accounts->pluck('value')->map(fn ($v) => (float) $v)->all());
+        $this->assertEquals(['2026-01-10', '2026-03-05', '2026-05-20'], $accounts->pluck('due_date')->map(fn ($d) => $d?->toDateString())->all());
+        $this->assertEqualsCanonicalizing(range(1, 3), $accounts->pluck('installment_number')->all());
+    }
+
+    public function test_it_rejects_custom_installments_when_sum_differs_from_value(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Serviço parcelado inválido',
+            'counterparty' => 'Fornecedor Y',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 1000,
+            'due_date' => '2026-01-10',
+            'installments' => [
+                'quantity' => 2,
+                'interval' => 'monthly',
+                'items' => [
+                    ['value' => 300, 'due_date' => '2026-01-10'],
+                    ['value' => 300, 'due_date' => '2026-02-10'],
+                ],
+            ],
+        ])->assertStatus(422);
+    }
 }

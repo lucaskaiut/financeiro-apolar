@@ -68,9 +68,12 @@ class StoreAccountRequest extends FormRequest
             'purchase_date' => [$hasCreditCard ? 'required' : 'nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'observation' => ['nullable', 'string'],
-            'installments' => ['nullable', 'array:quantity,interval'],
+            'installments' => ['nullable', 'array:quantity,interval,items'],
             'installments.quantity' => ['required_with:installments', 'integer', 'min:1', 'max:120'],
             'installments.interval' => ['nullable', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
+            'installments.items' => ['nullable', 'array', 'min:1', 'max:120'],
+            'installments.items.*.value' => ['required', 'numeric', 'gt:0'],
+            'installments.items.*.due_date' => ['required', 'date'],
             ...AccountAllocationValidation::rules($tenantId),
         ];
     }
@@ -82,6 +85,8 @@ class StoreAccountRequest extends FormRequest
                 $validator,
                 fn () => (float) $this->input('value'),
             );
+
+            $this->validateInstallmentItems($validator);
         });
     }
 
@@ -108,8 +113,57 @@ class StoreAccountRequest extends FormRequest
 
         $this->mergeDateOnlyFields(['due_date', 'purchase_date', 'expected_date']);
 
+        $this->normalizeInstallmentItems();
         $this->fillCategoryFromSubcategory();
         $this->merge(AccountAllocationValidation::fillCategoriesFromSubcategories($this->all()));
+    }
+
+    private function normalizeInstallmentItems(): void
+    {
+        $installments = $this->input('installments');
+
+        if (! is_array($installments) || ! isset($installments['items']) || ! is_array($installments['items'])) {
+            return;
+        }
+
+        foreach ($installments['items'] as $index => $item) {
+            if (array_key_exists('value', $item)) {
+                $installments['items'][$index]['value'] = (float) $item['value'];
+            }
+
+            if (! empty($item['due_date'])) {
+                try {
+                    $installments['items'][$index]['due_date'] = DateOnly::normalize($item['due_date']);
+                } catch (\InvalidArgumentException) {
+                    // Mantém o valor original para a validação `date` falhar com mensagem clara.
+                }
+            }
+        }
+
+        $this->merge(['installments' => $installments]);
+    }
+
+    private function validateInstallmentItems(Validator $validator): void
+    {
+        $items = $this->input('installments.items');
+
+        if (! is_array($items) || $items === []) {
+            return;
+        }
+
+        $sum = round(array_sum(array_map(
+            fn ($item) => (float) ($item['value'] ?? 0),
+            $items,
+        )), 2);
+
+        $total = round((float) $this->input('value'), 2);
+
+        if (abs($sum - $total) >= 0.01) {
+            $validator->errors()->add(
+                'installments.items',
+                'A soma dos valores das parcelas deve ser igual ao valor do lançamento.',
+            );
+        }
     }
 
     /**
