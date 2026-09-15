@@ -199,7 +199,7 @@ export function SearchSelect({
           onFocus={openDropdown}
           onKeyDown={handleKeyDown}
           className={cn(
-            'h-10 w-full rounded-lg bg-surface-2 pr-9 pl-3.5 text-sm text-foreground transition-colors',
+            'h-11 w-full rounded-lg bg-surface-2 pr-9 pl-3.5 text-sm text-foreground transition-colors',
             'placeholder:text-subtle',
             'disabled:cursor-not-allowed disabled:opacity-60',
             error && 'outline-2 outline-danger/60',

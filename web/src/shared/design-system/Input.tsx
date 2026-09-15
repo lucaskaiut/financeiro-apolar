@@ -7,7 +7,7 @@ export interface InputProps extends ComponentProps<'input'> {
 
 export const inputClasses = (invalid?: boolean, className?: string) =>
   cn(
-    'h-10 w-full rounded-lg bg-surface-2 px-3.5 text-sm text-foreground transition-colors',
+    'h-11 w-full rounded-lg bg-surface-2 px-3.5 text-sm text-foreground transition-colors',
     'placeholder:text-subtle',
     'disabled:cursor-not-allowed disabled:opacity-60',
     invalid && 'outline-2 outline-danger/60',

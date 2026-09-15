@@ -19,7 +19,7 @@ export function Select({ invalid, options, placeholder, className, ...props }: S
       <select
         aria-invalid={invalid || undefined}
         className={cn(
-          'h-10 w-full cursor-pointer appearance-none rounded-lg bg-surface-2 pr-9 pl-3.5 text-sm text-foreground transition-colors',
+          'h-11 w-full cursor-pointer appearance-none rounded-lg bg-surface-2 pr-9 pl-3.5 text-sm text-foreground transition-colors',
           'disabled:cursor-not-allowed disabled:opacity-60',
           invalid && 'outline-2 outline-danger/60',
           className,

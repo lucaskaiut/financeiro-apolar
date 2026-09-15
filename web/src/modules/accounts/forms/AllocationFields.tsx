@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
-import { Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, Plus, Trash2, TriangleAlert } from 'lucide-react'
 import {
   Button,
   SelectField,
@@ -13,6 +13,8 @@ import {
 import { formatCurrency } from '@/shared/utils/format'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { emptyAllocationLine, type AccountFormValues } from '../schemas/account.schema'
+
+const GRID = 'sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_2.5rem]'
 
 export function AllocationFields({ categoryType }: { categoryType: 'income' | 'expense' }) {
   const form = useFormContext<AccountFormValues>()
@@ -37,10 +39,19 @@ export function AllocationFields({ categoryType }: { categoryType: 'income' | 'e
   const allocations = useWatch({ control: form.control, name: 'allocations' }) ?? []
   const allocated = allocations.reduce((sum, line) => sum + Number(line.value || 0), 0)
   const remaining = Math.round((value - allocated) * 100) / 100
+  const complete = Math.abs(remaining) < 0.01
   const formError = form.formState.errors.allocations?.message as string | undefined
 
   return (
     <div className="space-y-4">
+      <div className={`hidden gap-3 px-1 text-xs font-medium tracking-wide text-muted uppercase sm:grid ${GRID}`}>
+        <span>Categoria</span>
+        <span>Subcategoria</span>
+        <span>Centro de custo</span>
+        <span className="text-right">Valor</span>
+        <span className="sr-only">Ações</span>
+      </div>
+
       {fields.map((field, index) => (
         <AllocationRow
           key={field.id}
@@ -52,23 +63,42 @@ export function AllocationFields({ categoryType }: { categoryType: 'income' | 'e
         />
       ))}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Button type="button" variant="secondary" size="sm" onClick={() => append(emptyAllocationLine())}>
-          <Plus className="size-4" />
-          Adicionar linha
-        </Button>
-
-        <p
-          className={`text-sm ${
-            Math.abs(remaining) < 0.01 ? 'text-success' : remaining > 0 ? 'text-muted' : 'text-danger'
-          }`}
-        >
-          Rateado {formatCurrency(allocated)} de {formatCurrency(value)}
-          {Math.abs(remaining) >= 0.01 ? ` · ${remaining > 0 ? 'faltam' : 'excedeu'} ${formatCurrency(Math.abs(remaining))}` : ''}
-        </p>
-      </div>
+      <Button type="button" variant="secondary" size="sm" onClick={() => append(emptyAllocationLine())}>
+        <Plus className="size-4" />
+        Adicionar rateio
+      </Button>
 
       {formError && <p className="text-[13px] text-danger">{formError}</p>}
+
+      <div className="rounded-lg bg-surface-2/50 p-4 text-sm">
+        <div className="space-y-1.5">
+          <SummaryLine label="Valor total" value={formatCurrency(value)} />
+          <SummaryLine label="Rateado" value={formatCurrency(allocated)} />
+        </div>
+        <div className="mt-2 flex items-center justify-between border-t border-surface-3 pt-2.5 font-medium text-foreground">
+          <span>Restante</span>
+          <span className="tabular-nums">{formatCurrency(Math.abs(remaining))}</span>
+        </div>
+        <div className={`mt-3 flex items-center gap-2 font-medium ${complete ? 'text-success' : 'text-warning'}`}>
+          {complete ? <CheckCircle2 className="size-4 shrink-0" /> : <TriangleAlert className="size-4 shrink-0" />}
+          <span>
+            {complete
+              ? 'Rateio concluído'
+              : remaining > 0
+                ? `Faltam ${formatCurrency(remaining)} para concluir o rateio`
+                : `Excedeu ${formatCurrency(Math.abs(remaining))} no rateio`}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between text-muted">
+      <span>{label}</span>
+      <span className="tabular-nums">{value}</span>
     </div>
   )
 }
@@ -90,53 +120,45 @@ function AllocationRow({
   const categoryId = useWatch({ control: form.control, name: `allocations.${index}.category_id` }) ?? ''
 
   return (
-    <div className="rounded-xl border border-surface-3 p-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <CategorySearchSelectField
-          name={`allocations.${index}.category_id`}
-          label="Categoria"
-          categoryType={categoryType}
-          required
-          onSelectOption={() => {
-            form.setValue(`allocations.${index}.subcategory_id`, '')
-          }}
-        />
-        <SubcategorySearchSelectField
-          name={`allocations.${index}.subcategory_id`}
-          label="Subcategoria"
-          categoryType={categoryType}
-          categoryId={categoryId}
-          onCategoryChange={(parentId) => form.setValue(`allocations.${index}.category_id`, parentId)}
-        />
-        <SelectField
-          name={`allocations.${index}.cost_center_id`}
-          label="Centro de custo"
-          options={costCenterOptions}
-          placeholder="Opcional"
-        />
-        <div className="flex items-end gap-2">
-          <TextField
-            name={`allocations.${index}.value`}
-            label="Valor"
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            className="flex-1"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mb-0.5 text-danger hover:bg-danger-soft hover:text-danger"
-            disabled={!canRemove}
-            onClick={onRemove}
-            aria-label={`Remover linha ${index + 1}`}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-      </div>
+    <div className={`grid grid-cols-1 gap-3 sm:items-start ${GRID}`}>
+      <CategorySearchSelectField
+        name={`allocations.${index}.category_id`}
+        placeholder="Categoria"
+        categoryType={categoryType}
+        onSelectOption={() => {
+          form.setValue(`allocations.${index}.subcategory_id`, '')
+        }}
+      />
+      <SubcategorySearchSelectField
+        name={`allocations.${index}.subcategory_id`}
+        placeholder="Subcategoria"
+        categoryType={categoryType}
+        categoryId={categoryId}
+        onCategoryChange={(parentId) => form.setValue(`allocations.${index}.category_id`, parentId)}
+      />
+      <SelectField
+        name={`allocations.${index}.cost_center_id`}
+        options={costCenterOptions}
+        placeholder="Centro de custo"
+      />
+      <TextField
+        name={`allocations.${index}.value`}
+        placeholder="0,00"
+        type="number"
+        step="0.01"
+        min="0"
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-11 text-danger hover:bg-danger-soft hover:text-danger sm:w-10"
+        disabled={!canRemove}
+        onClick={onRemove}
+        aria-label={`Remover linha ${index + 1}`}
+      >
+        <Trash2 className="size-4" />
+      </Button>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -8,7 +8,6 @@ import {
   CardContent,
   Form,
   RadioGroupField,
-  Section,
   SelectField,
   SwitchField,
   TextareaField,
@@ -21,6 +20,7 @@ import {
 } from '@/modules/categories/components/CategorySearchSelect'
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
+import { cn } from '@/shared/utils/cn'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useCompanyOptions } from '@/modules/companies/hooks/useCompanies'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
@@ -30,6 +30,30 @@ import { AllocationFields } from './AllocationFields'
 import { InstallmentItemsFields } from './InstallmentItemsFields'
 import type { AccountPayload } from '../services/accounts.service'
 import { PendingDocuments } from '../components/PendingDocuments'
+
+function FormSection({
+  title,
+  description,
+  className,
+  children,
+}: {
+  title: string
+  description?: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <Card className={cn('border border-surface-2', className)}>
+      <CardContent className="space-y-5 p-6">
+        <div>
+          <h2 className="text-base font-semibold text-foreground">{title}</h2>
+          {description && <p className="mt-1 text-sm text-muted">{description}</p>}
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
 
 interface AccountFormProps {
   mode: 'create' | 'edit'
@@ -170,200 +194,211 @@ export function AccountForm({
   }
 
   return (
-    <Card>
-      <CardContent>
-        <Form form={form} onSubmit={handleSubmit} className="space-y-8">
-          <Section
-            title="Tipo de lançamento"
-            description={hasSettlement ? 'Alterações refletem no fluxo de caixa realizado.' : undefined}
-          >
-            <RadioGroupField
-              name="type"
-              disabled={usingCreditCard}
-              options={[
-                { value: 'payable', label: 'Conta a pagar' },
-                { value: 'receivable', label: 'Conta a receber' },
-              ]}
-            />
-          </Section>
+    <div className="mx-auto w-full max-w-[1200px]">
+      <Form form={form} onSubmit={handleSubmit} className="space-y-6">
+        <FormSection
+          title="Tipo de lançamento"
+          description={hasSettlement ? 'Alterações refletem no fluxo de caixa realizado.' : undefined}
+        >
+          <RadioGroupField
+            name="type"
+            disabled={usingCreditCard}
+            options={[
+              { value: 'payable', label: 'Conta a pagar' },
+              { value: 'receivable', label: 'Conta a receber' },
+            ]}
+          />
+        </FormSection>
 
-          <Section title="Informações do lançamento">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField name="description" label="Descrição" required className="sm:col-span-2" />
-              <TextField
-                name="counterparty"
-                label={type === 'receivable' ? 'Cliente' : 'Fornecedor'}
-                className="sm:col-span-2"
-              />
-              {mode === 'create' && (
-                <SelectField
-                  name="credit_card_id"
-                  label="Cartão de crédito"
-                  options={creditCards.data ?? []}
-                  placeholder="Nenhum (fluxo normal)"
-                  hint="Se informado, o vencimento segue o ciclo da fatura do cartão."
-                  className="sm:col-span-2"
-                />
-              )}
-              {!usingCreditCard && (
-                <SelectField
-                  name="bank_account_id"
-                  label="Conta bancária"
-                  options={bankAccounts.data ?? []}
-                  placeholder="Selecione"
-                  required
-                />
-              )}
+        <FormSection title="Informações do lançamento">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <TextField name="description" label="Descrição" required className="sm:col-span-2" />
+            <TextField
+              name="counterparty"
+              label={type === 'receivable' ? 'Cliente' : 'Fornecedor'}
+              className="sm:col-span-2"
+            />
+            {!usingCreditCard && (
               <SelectField
-                name="company_id"
-                label="Empresa"
-                options={companies.data ?? []}
-                placeholder="Opcional"
-              />
-              {!split && (
-                <>
-                  <SelectField
-                    name="cost_center_id"
-                    label="Centro de custo"
-                    options={costCenters.data ?? []}
-                    placeholder="Opcional"
-                  />
-                  <CategorySearchSelectField
-                    name="category_id"
-                    label="Categoria"
-                    categoryType={categoryType}
-                    required
-                    onSelectOption={(option) => {
-                      const subcategoryId = form.getValues('subcategory_id')
-                      if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
-                        form.setValue('subcategory_id', '')
-                        setSelectedSubcategory(null)
-                      }
-                    }}
-                  />
-                  <SubcategorySearchSelectField
-                    name="subcategory_id"
-                    label="Subcategoria"
-                    categoryType={categoryType}
-                    categoryId={categoryId}
-                    onCategoryChange={(parentId) => form.setValue('category_id', parentId)}
-                    onSelectOption={(option) => setSelectedSubcategory(option)}
-                  />
-                </>
-              )}
-              <TextField
-                name="value"
-                label="Valor"
-                type="number"
-                step="0.01"
-                min="0"
+                name="bank_account_id"
+                label="Conta bancária"
+                options={bankAccounts.data ?? []}
+                placeholder="Selecione"
                 required
-                hint={hasSettlement ? 'Alterações refletem no fluxo de caixa realizado.' : undefined}
               />
-              <TextField
-                name="purchase_date"
-                label="Data da compra"
-                type="date"
-                required={usingCreditCard}
-                hint={
-                  usingCreditCard
-                    ? 'O vencimento é calculado pelo ciclo da fatura do cartão.'
-                    : 'Opcional'
-                }
+            )}
+            {mode === 'create' && (
+              <SelectField
+                name="credit_card_id"
+                label="Cartão de crédito"
+                options={creditCards.data ?? []}
+                placeholder="Nenhum (fluxo normal)"
+                hint="Se informado, o vencimento segue o ciclo da fatura do cartão."
               />
-              {!usingCreditCard && (
-                <TextField name="due_date" label="Data de vencimento" type="date" required />
-              )}
-              {mode === 'edit' && usingCreditCard && (
-                <TextField name="due_date" label="Data de vencimento" type="date" disabled />
-              )}
-              {mode === 'edit' && hasSettlement && (
-                <TextField
-                  name="paid_date"
-                  label="Data da baixa"
-                  type="date"
-                  required
-                  hint="Alterações refletem no fluxo de caixa realizado."
-                />
-              )}
-              {!usingCreditCard && (
-                <TextField
-                  name="expected_date"
-                  label={type === 'receivable' ? 'Data prevista de recebimento' : 'Data prevista de pagamento'}
-                  type="date"
-                />
-              )}
-            </div>
-          </Section>
-
-          <Section title="Observação">
-            <TextareaField name="observation" rows={3} />
-          </Section>
-
-          <Section
-            title="Rateio"
-            description="Distribua o valor entre categorias e centros de custo. A conciliação continua em um único lançamento."
-          >
-            <SwitchField
-              name="split"
-              label="Ratear este lançamento"
-              hint="Os relatórios separam as fatias; o extrato concilia o valor total."
+            )}
+            <SelectField
+              name="company_id"
+              label="Empresa"
+              options={companies.data ?? []}
+              placeholder="Opcional"
             />
-            {split && (
-              <div className="mt-4">
-                <AllocationFields categoryType={categoryType} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Valores" description="Dados financeiros do lançamento.">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <TextField
+              name="value"
+              label="Valor"
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              hint={hasSettlement ? 'Alterações refletem no fluxo de caixa realizado.' : undefined}
+              className="sm:col-span-2"
+            />
+            {!split && (
+              <>
+                <CategorySearchSelectField
+                  name="category_id"
+                  label="Categoria"
+                  categoryType={categoryType}
+                  required
+                  onSelectOption={(option) => {
+                    const subcategoryId = form.getValues('subcategory_id')
+                    if (subcategoryId && selectedSubcategory?.parent_id !== option.value) {
+                      form.setValue('subcategory_id', '')
+                      setSelectedSubcategory(null)
+                    }
+                  }}
+                />
+                <SubcategorySearchSelectField
+                  name="subcategory_id"
+                  label="Subcategoria"
+                  categoryType={categoryType}
+                  categoryId={categoryId}
+                  onCategoryChange={(parentId) => form.setValue('category_id', parentId)}
+                  onSelectOption={(option) => setSelectedSubcategory(option)}
+                />
+                <SelectField
+                  name="cost_center_id"
+                  label="Centro de custo"
+                  options={costCenters.data ?? []}
+                  placeholder="Opcional"
+                />
+              </>
+            )}
+          </div>
+        </FormSection>
+
+        <FormSection title="Datas">
+          <div className="grid gap-5 sm:grid-cols-3">
+            <TextField
+              name="purchase_date"
+              label="Data da compra"
+              type="date"
+              required={usingCreditCard}
+              hint={
+                usingCreditCard
+                  ? 'O vencimento é calculado pelo ciclo da fatura do cartão.'
+                  : 'Opcional'
+              }
+            />
+            {!usingCreditCard && (
+              <TextField name="due_date" label="Data de vencimento" type="date" required />
+            )}
+            {mode === 'edit' && usingCreditCard && (
+              <TextField name="due_date" label="Data de vencimento" type="date" disabled />
+            )}
+            {!usingCreditCard && (
+              <TextField
+                name="expected_date"
+                label={type === 'receivable' ? 'Data prevista de recebimento' : 'Data prevista de pagamento'}
+                type="date"
+              />
+            )}
+            {mode === 'edit' && hasSettlement && (
+              <TextField
+                name="paid_date"
+                label="Data da baixa"
+                type="date"
+                required
+                hint="Alterações refletem no fluxo de caixa realizado."
+              />
+            )}
+          </div>
+        </FormSection>
+
+        <FormSection title="Observações">
+          <TextareaField name="observation" rows={4} />
+        </FormSection>
+
+        <FormSection
+          title="Rateio"
+          description="Distribua o valor entre categorias e centros de custo. A conciliação continua em um único lançamento."
+          className="border-dashed border-surface-3 bg-surface-2/40"
+        >
+          <SwitchField
+            name="split"
+            label="Ratear este lançamento"
+            hint="Os relatórios separam as fatias; o extrato concilia o valor total."
+          />
+          {split && (
+            <div className="mt-5">
+              <AllocationFields categoryType={categoryType} />
+            </div>
+          )}
+        </FormSection>
+
+        {mode === 'create' && (
+          <FormSection
+            title="Parcelamento"
+            description={
+              usingCreditCard
+                ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma.'
+                : 'Divida o valor em parcelas iguais ou personalize cada parcela.'
+            }
+          >
+            <SwitchField name="installments" label="Parcelar este lançamento" />
+            {installments && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <TextField name="installment_quantity" label="Quantidade de parcelas" type="number" min="1" max="120" />
+                {!usingCreditCard && (
+                  <SelectField
+                    name="installment_interval"
+                    label="Intervalo entre parcelas"
+                    options={[
+                      { value: 'daily', label: 'Diário' },
+                      { value: 'weekly', label: 'Semanal' },
+                      { value: 'monthly', label: 'Mensal' },
+                    ]}
+                  />
+                )}
               </div>
             )}
-          </Section>
+            {installments && !usingCreditCard && (
+              <div className="mt-4">
+                <SwitchField
+                  name="customize_installments"
+                  label="Personalizar parcelas"
+                  hint="Defina o valor e o vencimento de cada parcela individualmente. A soma deve ser igual ao valor do lançamento."
+                />
+                {customizeInstallments && <InstallmentItemsFields />}
+              </div>
+            )}
+          </FormSection>
+        )}
 
-          {mode === 'create' && (
-            <Section
-              title="Parcelamento"
-              description={
-                usingCreditCard
-                  ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma.'
-                  : 'Divida o valor em parcelas iguais ou personalize cada parcela.'
-              }
-            >
-              <SwitchField name="installments" label="Parcelar este lançamento" />
-              {installments && (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <TextField name="installment_quantity" label="Quantidade de parcelas" type="number" min="1" max="120" />
-                  {!usingCreditCard && (
-                    <SelectField
-                      name="installment_interval"
-                      label="Intervalo entre parcelas"
-                      options={[
-                        { value: 'daily', label: 'Diário' },
-                        { value: 'weekly', label: 'Semanal' },
-                        { value: 'monthly', label: 'Mensal' },
-                      ]}
-                    />
-                  )}
-                </div>
-              )}
-              {installments && !usingCreditCard && (
-                <div className="mt-4">
-                  <SwitchField
-                    name="customize_installments"
-                    label="Personalizar parcelas"
-                    hint="Defina o valor e o vencimento de cada parcela individualmente. A soma deve ser igual ao valor do lançamento."
-                  />
-                  {customizeInstallments && <InstallmentItemsFields />}
-                </div>
-              )}
-            </Section>
-          )}
+        {mode === 'create' && (
+          <FormSection
+            title="Documentos"
+            description="Anexe faturas, boletos e comprovantes. Os arquivos serão salvos após a criação do lançamento."
+          >
+            <PendingDocuments files={documents} onChange={setDocuments} disabled={submitting} />
+          </FormSection>
+        )}
 
-          {mode === 'create' && (
-            <Section
-              title="Documentos"
-              description="Anexe faturas, boletos e comprovantes. Os arquivos serão salvos após a criação do lançamento."
-            >
-              <PendingDocuments files={documents} onChange={setDocuments} disabled={submitting} />
-            </Section>
-          )}
-
+        <div className="sticky bottom-0 z-10 border-t border-surface-2 bg-background/95 py-4 backdrop-blur">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <ButtonLink to="/accounts" variant="secondary">
               Cancelar
@@ -372,8 +407,8 @@ export function AccountForm({
               {mode === 'create' ? 'Criar lançamento' : 'Salvar alterações'}
             </Button>
           </div>
-        </Form>
-      </CardContent>
-    </Card>
+        </div>
+      </Form>
+    </div>
   )
 }

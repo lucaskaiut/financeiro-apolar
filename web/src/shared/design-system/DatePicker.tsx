@@ -211,7 +211,7 @@ export const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(function
   }
 
   const fieldClasses = cn(
-    'datepicker-control group/date flex h-10 w-full min-w-38 items-center rounded-lg bg-surface-2 transition-shadow',
+    'datepicker-control group/date flex h-11 w-full min-w-38 items-center rounded-lg bg-surface-2 transition-shadow',
     'shadow-[inset_0_0_0_1px_var(--app-surface-3)]',
     'hover:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--app-fg-subtle)_55%,transparent)]',
     disabled && 'cursor-not-allowed opacity-60',
