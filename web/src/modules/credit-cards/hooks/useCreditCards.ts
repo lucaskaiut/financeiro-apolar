@@ -5,6 +5,7 @@ import { toast } from '@/shared/stores/toast.store'
 import {
   creditCardsService,
   type CreditCardPayload,
+  type ImportItemPayload,
 } from '../services/credit-cards.service'
 
 export function useCreditCardsQuery(params: ListParams) {
@@ -93,20 +94,29 @@ export function useImportInvoice(cardId: string) {
 
   return useMutation({
     mutationFn: (payload: {
-      file: File
       reference_month: string
       paid_date: string
       bank_account_id: string
-      category_id: string
-      cost_center_id?: string | null
+      items: ImportItemPayload[]
     }) => creditCardsService.importInvoice(cardId, payload),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
       toast.success(
         'Fatura importada',
-        `${result.imported} compras importadas, ${result.skipped} ignoradas. Fatura fechada e liquidada.`,
+        `${result.imported} compras importadas, ${result.ignored} ignoradas. Fatura fechada e liquidada.`,
       )
     },
+  })
+}
+
+export function usePreviewInvoice(cardId: string) {
+  return useMutation({
+    mutationFn: (payload: {
+      file: File
+      reference_month: string
+      category_id: string
+      cost_center_id?: string | null
+    }) => creditCardsService.previewInvoice(cardId, payload),
   })
 }

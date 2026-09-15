@@ -6,6 +6,7 @@ use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\CreditCard\Http\Requests\CloseCreditCardInvoiceRequest;
 use App\Modules\CreditCard\Http\Requests\ImportCreditCardInvoiceRequest;
+use App\Modules\CreditCard\Http\Requests\PreviewCreditCardInvoiceRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardPurchaseRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardRequest;
 use App\Modules\CreditCard\Http\Requests\UpdateCreditCardRequest;
@@ -120,30 +121,19 @@ class CreditCardController extends ApiController
 
         $referenceMonth = $request->validated('reference_month');
 
-        $exists = CreditCardInvoice::query()
-            ->where('credit_card_id', $creditCard->uuid)
-            ->where('reference_month', $referenceMonth)
-            ->exists();
-
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'reference_month' => ['Já existe uma fatura para este cartão e mês de referência.'],
-            ]);
-        }
+        $this->ensureInvoiceNotExists($creditCard, $referenceMonth);
 
         try {
             $result = $this->imports->import(
                 $creditCard,
                 $referenceMonth,
                 $request->validated('bank_account_id'),
-                $request->validated('category_id'),
-                $request->validated('cost_center_id'),
                 $request->validated('paid_date'),
-                (string) $request->file('file')?->getRealPath(),
+                $request->validated('items'),
                 $request->user(),
             );
         } catch (\InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['file' => [$e->getMessage()]]);
+            throw ValidationException::withMessages(['items' => [$e->getMessage()]]);
         }
 
         $this->audit->recordEntity(
@@ -154,13 +144,56 @@ class CreditCardController extends ApiController
             [
                 'reference_month' => $referenceMonth,
                 'imported' => $result['imported'],
-                'skipped' => $result['skipped'],
+                'ignored' => $result['ignored'],
                 'total' => $result['total'],
                 'paid_date' => $request->validated('paid_date'),
             ],
         );
 
         return $this->success($result, 'Fatura importada e liquidada com sucesso.');
+    }
+
+    public function importPreview(PreviewCreditCardInvoiceRequest $request, CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        $referenceMonth = $request->validated('reference_month');
+
+        $this->ensureInvoiceNotExists($creditCard, $referenceMonth);
+
+        try {
+            $result = $this->imports->preview(
+                $creditCard,
+                $referenceMonth,
+                $request->validated('category_id'),
+                $request->validated('cost_center_id'),
+                (string) $request->file('file')?->getRealPath(),
+            );
+        } catch (\Throwable $e) {
+            report($e);
+
+            $message = $e instanceof \InvalidArgumentException || $e instanceof \RuntimeException
+                ? $e->getMessage()
+                : 'Não foi possível ler o arquivo. Verifique se o formato é XLSX/XLS válido.';
+
+            throw ValidationException::withMessages(['file' => [$message]]);
+        }
+
+        return $this->success($result, 'Compras identificadas com sucesso.');
+    }
+
+    private function ensureInvoiceNotExists(CreditCard $creditCard, string $referenceMonth): void
+    {
+        $exists = CreditCardInvoice::query()
+            ->where('credit_card_id', $creditCard->uuid)
+            ->where('reference_month', $referenceMonth)
+            ->exists();
+
+        if ($exists) {
+            throw ValidationException::withMessages([
+                'reference_month' => ['Já existe uma fatura para este cartão e mês de referência.'],
+            ]);
+        }
     }
 
     public function invoices(CreditCard $creditCard): JsonResponse

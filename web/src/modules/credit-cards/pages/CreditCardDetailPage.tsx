@@ -24,13 +24,11 @@ import {
   useCreditCardInvoices,
   useCreditCardQuery,
 } from '../hooks/useCreditCards'
-import { ImportInvoiceDialog } from '../components/ImportInvoiceDialog'
 
 export default function CreditCardDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [referenceMonth, setReferenceMonth] = useState('')
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
 
   const cardQuery = useCreditCardQuery(id)
   const invoicesQuery = useCreditCardInvoices(id)
@@ -203,10 +201,10 @@ export default function CreditCardDetailPage() {
                     >
                       Fechar fatura
                     </Button>
-                    <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                    <ButtonLink to={`/credit-cards/${id}/invoices/import`} variant="secondary">
                       <Upload className="size-4" />
                       Importar fatura
-                    </Button>
+                    </ButtonLink>
                   </div>
                 </Can>
               </div>
@@ -255,8 +253,6 @@ export default function CreditCardDetailPage() {
           </Card>
         )}
       </PageContent>
-
-      <ImportInvoiceDialog cardId={id ?? ''} open={importOpen} onClose={() => setImportOpen(false)} />
     </Page>
   )
 }

@@ -12,6 +12,51 @@ export interface CreditCardPayload {
   status?: string
 }
 
+export interface ImportPreviewItem {
+  id: number
+  purchase_date: string
+  description: string
+  value: number
+  category_id: string | null
+  subcategory_id: string | null
+  cost_center_id: string | null
+  status: 'normal' | 'ignored'
+  is_duplicate: boolean
+  existing: { date: string | null; value: number; description: string } | null
+}
+
+export interface ImportPreviewResult {
+  due_date: string
+  total: number
+  items: ImportPreviewItem[]
+}
+
+export interface ImportSplitPayload {
+  description: string
+  value: number
+  category_id: string
+  subcategory_id?: string | null
+  cost_center_id?: string | null
+}
+
+export interface ImportItemPayload {
+  description: string
+  purchase_date: string
+  value: number
+  category_id?: string | null
+  subcategory_id?: string | null
+  cost_center_id?: string | null
+  status?: 'normal' | 'ignored'
+  splits?: ImportSplitPayload[]
+}
+
+export interface ImportInvoiceResult {
+  imported: number
+  ignored: number
+  total: number
+  invoice_id: string
+}
+
 export const creditCardsService = {
   async list(params: ListParams): Promise<PaginatedResponse<CreditCard>> {
     const response = await http.get<PaginatedResponse<CreditCard>>('/credit-cards', { params })
@@ -55,30 +100,41 @@ export const creditCardsService = {
     return response.data.data
   },
 
-  async importInvoice(
+  async previewInvoice(
     id: string,
     payload: {
       file: File
       reference_month: string
-      paid_date: string
-      bank_account_id: string
       category_id: string
       cost_center_id?: string | null
     },
-  ): Promise<{ imported: number; skipped: number; total: number; invoice_id: string }> {
+  ): Promise<ImportPreviewResult> {
     const formData = new FormData()
     formData.append('file', payload.file)
     formData.append('reference_month', payload.reference_month)
-    formData.append('paid_date', payload.paid_date)
-    formData.append('bank_account_id', payload.bank_account_id)
     formData.append('category_id', payload.category_id)
     if (payload.cost_center_id) formData.append('cost_center_id', payload.cost_center_id)
 
-    const response = await http.post<ApiResponse<{ imported: number; skipped: number; total: number; invoice_id: string }>>(
-      `/credit-cards/${id}/invoices/import`,
+    const response = await http.post<ApiResponse<ImportPreviewResult>>(
+      `/credit-cards/${id}/invoices/import/preview`,
       formData,
     )
 
     return response.data.data
   },
+
+  async importInvoice(
+    id: string,
+    payload: {
+      reference_month: string
+      paid_date: string
+      bank_account_id: string
+      items: ImportItemPayload[]
+    },
+  ): Promise<ImportInvoiceResult> {
+    const response = await http.post<ApiResponse<ImportInvoiceResult>>(`/credit-cards/${id}/invoices/import`, payload)
+
+    return response.data.data
+  },
 }
+

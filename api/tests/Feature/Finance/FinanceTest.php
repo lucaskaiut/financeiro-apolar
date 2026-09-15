@@ -900,17 +900,40 @@ OFX;
 
         $file = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
 
-        $response = $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+        $preview = $this->postJson("/api/credit-cards/{$cardId}/invoices/import/preview", [
             'file' => $file,
             'reference_month' => '2026-09',
-            'paid_date' => '2026-09-15',
-            'bank_account_id' => $bankAccountId,
             'category_id' => $categoryId,
             'cost_center_id' => $costCenterId,
         ])->assertOk();
 
+        $previewItems = $preview->json('data.items');
+
+        $this->assertCount(3, $previewItems);
+        $this->assertSame(100.5, (float) $previewItems[0]['value']);
+
+        // Ignora a terceira compra (simula a ação "ignorar" na revisão).
+        $items = array_map(function (array $item, int $index) use ($categoryId, $costCenterId): array {
+            return [
+                'description' => $item['description'],
+                'purchase_date' => $item['purchase_date'],
+                'value' => $item['value'],
+                'status' => $index === 2 ? 'ignored' : 'normal',
+                'category_id' => $categoryId,
+                'subcategory_id' => null,
+                'cost_center_id' => $costCenterId,
+            ];
+        }, $previewItems, array_keys($previewItems));
+
+        $response = $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'items' => $items,
+        ])->assertOk();
+
         $response->assertJsonPath('data.imported', 2);
-        $response->assertJsonPath('data.skipped', 1);
+        $response->assertJsonPath('data.ignored', 1);
         $response->assertJsonPath('data.total', 300.5);
 
         $invoice = CreditCardInvoice::query()->first();
@@ -939,6 +962,85 @@ OFX;
             ->assertJsonPath('data.0.status', 'paid');
     }
 
+    public function test_credit_card_invoice_import_with_rateio(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $costCenterId = $this->createCostCenter();
+        $categoryA = $this->createCategory('expense', 'Fornecedores');
+        $categoryB = $this->createCategory('expense', 'Serviços');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Visa Infinite',
+            'closing_day' => 10,
+            'due_day' => 15,
+            'bank_account_id' => $bankAccountId,
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'items' => [
+                [
+                    'description' => 'Compra rateada',
+                    'purchase_date' => '2026-08-28',
+                    'value' => 300,
+                    'status' => 'normal',
+                    'splits' => [
+                        ['description' => 'Parte A', 'value' => 180, 'category_id' => $categoryA, 'subcategory_id' => null, 'cost_center_id' => $costCenterId],
+                        ['description' => 'Parte B', 'value' => 120, 'category_id' => $categoryB, 'subcategory_id' => null, 'cost_center_id' => $costCenterId],
+                    ],
+                ],
+            ],
+        ])->assertOk()->assertJsonPath('data.imported', 2);
+
+        $purchases = FinancialAccount::query()
+            ->where('credit_card_id', $cardId)
+            ->where('is_card_purchase', true)
+            ->get();
+
+        $this->assertCount(2, $purchases);
+        $this->assertEqualsCanonicalizing([180.0, 120.0], $purchases->pluck('value')->map(fn ($v) => (float) $v)->all());
+        $this->assertEqualsCanonicalizing(['Parte A', 'Parte B'], $purchases->pluck('description')->all());
+    }
+
+    public function test_credit_card_invoice_import_rejects_unbalanced_rateio(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Visa Gold',
+            'closing_day' => 10,
+            'due_day' => 15,
+            'bank_account_id' => $bankAccountId,
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'items' => [
+                [
+                    'description' => 'Compra rateada',
+                    'purchase_date' => '2026-08-28',
+                    'value' => 300,
+                    'status' => 'normal',
+                    'splits' => [
+                        ['description' => 'Parte A', 'value' => 100, 'category_id' => $categoryId],
+                        ['description' => 'Parte B', 'value' => 100, 'category_id' => $categoryId],
+                    ],
+                ],
+            ],
+        ])->assertUnprocessable();
+    }
+
     public function test_credit_card_invoice_import_aborts_when_invoice_exists(): void
     {
         $tenant = $this->createTenantWithRoles();
@@ -954,21 +1056,26 @@ OFX;
             'bank_account_id' => $bankAccountId,
         ])->assertCreated()->json('data.id');
 
-        $path = $this->buildCardStatement();
-        $file = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+        $items = [
+            [
+                'description' => 'Compra A',
+                'purchase_date' => '2026-08-28',
+                'value' => 100.5,
+                'status' => 'normal',
+                'category_id' => $categoryId,
+                'subcategory_id' => null,
+                'cost_center_id' => null,
+            ],
+        ];
 
         $payload = [
-            'file' => $file,
             'reference_month' => '2026-09',
             'paid_date' => '2026-09-15',
             'bank_account_id' => $bankAccountId,
-            'category_id' => $categoryId,
+            'items' => $items,
         ];
 
         $this->postJson("/api/credit-cards/{$cardId}/invoices/import", $payload)->assertOk();
-
-        $secondFile = new UploadedFile($path, 'fatura.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
-        $payload['file'] = $secondFile;
 
         $this->postJson("/api/credit-cards/{$cardId}/invoices/import", $payload)
             ->assertUnprocessable()

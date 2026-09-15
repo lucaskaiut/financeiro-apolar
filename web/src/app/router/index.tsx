@@ -33,6 +33,7 @@ const CreditCardsListPage = lazy(() => import('@/modules/credit-cards/pages/Cred
 const CreditCardCreatePage = lazy(() => import('@/modules/credit-cards/pages/CreditCardCreatePage'))
 const CreditCardEditPage = lazy(() => import('@/modules/credit-cards/pages/CreditCardEditPage'))
 const CreditCardDetailPage = lazy(() => import('@/modules/credit-cards/pages/CreditCardDetailPage'))
+const ImportInvoicePage = lazy(() => import('@/modules/credit-cards/pages/ImportInvoicePage'))
 
 const CategoriesListPage = lazy(() => import('@/modules/categories/pages/CategoriesListPage'))
 const CategoryCreatePage = lazy(() => import('@/modules/categories/pages/CategoryCreatePage'))
@@ -234,6 +235,14 @@ export const router = createBrowserRouter([
             element: (
               <PermissionGuard permission={Permission.CREDIT_CARDS_VIEW}>
                 <CreditCardDetailPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/credit-cards/:id/invoices/import',
+            element: (
+              <PermissionGuard permission={Permission.CREDIT_CARDS_UPDATE}>
+                <ImportInvoicePage />
               </PermissionGuard>
             ),
           },

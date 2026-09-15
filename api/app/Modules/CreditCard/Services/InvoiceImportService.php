@@ -12,7 +12,8 @@ use App\Modules\User\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Importa a fatura do cartão: cria as compras, fecha a fatura e baixa a conta a pagar.
+ * Importa a fatura do cartão: extrai as compras (preview), cria as compras,
+ * fecha a fatura e baixa a conta a pagar.
  */
 class InvoiceImportService
 {
@@ -23,72 +24,116 @@ class InvoiceImportService
     ) {}
 
     /**
-     * @return array{imported: int, skipped: int, total: float, invoice_id: string}
+     * Extrai as compras do arquivo e detecta possíveis duplicatas, sem persistir nada.
+     *
+     * @return array{due_date: string, total: float, items: list<array<string, mixed>>}
+     */
+    public function preview(
+        CreditCard $creditCard,
+        string $referenceMonth,
+        string $categoryId,
+        ?string $costCenterId,
+        string $filePath,
+    ): array {
+        $items = $this->parser->parse($filePath);
+
+        $existing = FinancialAccount::query()
+            ->where('credit_card_id', $creditCard->uuid)
+            ->where('is_card_purchase', true)
+            ->get(['uuid', 'purchase_date', 'value', 'description'])
+            ->mapWithKeys(fn (FinancialAccount $purchase) => [
+                $this->dedupKey($purchase->purchase_date?->toDateString(), (float) $purchase->value) => $purchase,
+            ]);
+
+        $preview = [];
+
+        foreach ($items as $index => $item) {
+            $key = $this->dedupKey($item['purchase_date'], $item['value']);
+            $duplicate = $existing->get($key);
+
+            $preview[] = [
+                'id' => $index,
+                'purchase_date' => $item['purchase_date'],
+                'description' => $item['description'],
+                'value' => $item['value'],
+                'category_id' => $categoryId,
+                'subcategory_id' => null,
+                'cost_center_id' => $costCenterId,
+                'status' => $duplicate ? 'ignored' : 'normal',
+                'is_duplicate' => $duplicate !== null,
+                'existing' => $duplicate !== null ? [
+                    'date' => $duplicate->purchase_date?->toDateString(),
+                    'value' => (float) $duplicate->value,
+                    'description' => $duplicate->description,
+                ] : null,
+            ];
+        }
+
+        return [
+            'due_date' => $this->creditCards->invoiceDueDate($creditCard, $referenceMonth)->toDateString(),
+            'total' => round(array_sum(array_column($items, 'value')), 2),
+            'items' => $preview,
+        ];
+    }
+
+    /**
+     * @param  list<array{description: string, purchase_date: string, value: numeric, category_id: string, subcategory_id?: ?string, cost_center_id?: ?string, status?: string, splits?: list<array{description: string, value: numeric, category_id: string, subcategory_id?: ?string, cost_center_id?: ?string}>}>  $items
+     * @return array{imported: int, ignored: int, total: float, invoice_id: string}
      */
     public function import(
         CreditCard $creditCard,
         string $referenceMonth,
         string $bankAccountId,
-        string $categoryId,
-        ?string $costCenterId,
         string $paidDate,
-        string $filePath,
+        array $items,
         User $user,
     ): array {
-        $items = $this->parser->parse($filePath);
-
-        return DB::transaction(function () use (
-            $creditCard,
-            $referenceMonth,
-            $bankAccountId,
-            $categoryId,
-            $costCenterId,
-            $paidDate,
-            $user,
-            $items,
-        ): array {
+        return DB::transaction(function () use ($creditCard, $referenceMonth, $bankAccountId, $paidDate, $user, $items): array {
             $dueDate = $this->creditCards->invoiceDueDate($creditCard, $referenceMonth)->toDateString();
 
-            $existing = FinancialAccount::query()
-                ->where('credit_card_id', $creditCard->uuid)
-                ->where('is_card_purchase', true)
-                ->get(['purchase_date', 'value'])
-                ->mapWithKeys(fn (FinancialAccount $purchase) => [
-                    $this->dedupKey($purchase->purchase_date?->toDateString(), (float) $purchase->value) => true,
-                ]);
-
             $imported = 0;
-            $skipped = 0;
+            $ignored = 0;
 
             foreach ($items as $item) {
-                $key = $this->dedupKey($item['purchase_date'], $item['value']);
-
-                if (isset($existing[$key])) {
-                    $skipped++;
+                if (($item['status'] ?? 'normal') === 'ignored') {
+                    $ignored++;
 
                     continue;
                 }
 
-                FinancialAccount::query()->create([
-                    'type' => AccountType::Payable,
+                $splits = $item['splits'] ?? [];
+
+                if ($splits !== []) {
+                    foreach ($splits as $split) {
+                        $this->createPurchase($creditCard, $dueDate, [
+                            'description' => $split['description'],
+                            'value' => (float) $split['value'],
+                            'purchase_date' => $item['purchase_date'],
+                            'category_id' => $split['category_id'],
+                            'subcategory_id' => $split['subcategory_id'] ?? null,
+                            'cost_center_id' => $split['cost_center_id'] ?? null,
+                        ]);
+                    }
+
+                    $imported += count($splits);
+
+                    continue;
+                }
+
+                $this->createPurchase($creditCard, $dueDate, [
                     'description' => $item['description'],
-                    'credit_card_id' => $creditCard->uuid,
-                    'category_id' => $categoryId,
-                    'cost_center_id' => $costCenterId,
-                    'value' => $item['value'],
+                    'value' => (float) $item['value'],
                     'purchase_date' => $item['purchase_date'],
-                    'due_date' => $dueDate,
-                    'status' => AccountStatus::Open,
-                    'is_card_purchase' => true,
-                    'is_card_invoice_payable' => false,
+                    'category_id' => $item['category_id'],
+                    'subcategory_id' => $item['subcategory_id'] ?? null,
+                    'cost_center_id' => $item['cost_center_id'] ?? null,
                 ]);
 
-                $existing[$key] = true;
                 $imported++;
             }
 
             if ($imported === 0) {
-                throw new \InvalidArgumentException('Nenhuma compra nova foi encontrada no arquivo para importar.');
+                throw new \InvalidArgumentException('Nenhuma compra selecionada para importar.');
             }
 
             $invoice = $this->creditCards->closeInvoice($creditCard, $referenceMonth, $bankAccountId);
@@ -100,11 +145,32 @@ class InvoiceImportService
 
             return [
                 'imported' => $imported,
-                'skipped' => $skipped,
+                'ignored' => $ignored,
                 'total' => (float) $invoice->total_value,
                 'invoice_id' => $invoice->uuid,
             ];
         });
+    }
+
+    /**
+     * @param  array{description: string, value: float, purchase_date: string, category_id: string, subcategory_id: ?string, cost_center_id: ?string}  $data
+     */
+    private function createPurchase(CreditCard $creditCard, string $dueDate, array $data): FinancialAccount
+    {
+        return FinancialAccount::query()->create([
+            'type' => AccountType::Payable,
+            'description' => $data['description'],
+            'credit_card_id' => $creditCard->uuid,
+            'category_id' => $data['category_id'],
+            'subcategory_id' => $data['subcategory_id'],
+            'cost_center_id' => $data['cost_center_id'],
+            'value' => $data['value'],
+            'purchase_date' => $data['purchase_date'],
+            'due_date' => $dueDate,
+            'status' => AccountStatus::Open,
+            'is_card_purchase' => true,
+            'is_card_invoice_payable' => false,
+        ]);
     }
 
     private function dedupKey(?string $date, float $value): string
