@@ -42,6 +42,10 @@ const AccountsListPage = lazy(() => import('@/modules/accounts/pages/AccountsLis
 const AccountCreatePage = lazy(() => import('@/modules/accounts/pages/AccountCreatePage'))
 const AccountEditPage = lazy(() => import('@/modules/accounts/pages/AccountEditPage'))
 
+const InstallmentsListPage = lazy(() => import('@/modules/installments/pages/InstallmentsListPage'))
+const InstallmentDetailPage = lazy(() => import('@/modules/installments/pages/InstallmentDetailPage'))
+const InstallmentEditPage = lazy(() => import('@/modules/installments/pages/InstallmentEditPage'))
+
 const RecurrencesListPage = lazy(() => import('@/modules/recurrences/pages/RecurrencesListPage'))
 const RecurrenceCreatePage = lazy(() => import('@/modules/recurrences/pages/RecurrenceCreatePage'))
 const RecurrenceEditPage = lazy(() => import('@/modules/recurrences/pages/RecurrenceEditPage'))
@@ -278,6 +282,30 @@ export const router = createBrowserRouter([
             element: (
               <PermissionGuard permission={Permission.ACCOUNTS_UPDATE}>
                 <AccountEditPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/installments',
+            element: (
+              <PermissionGuard permission={Permission.ACCOUNTS_VIEW}>
+                <InstallmentsListPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/installments/:id',
+            element: (
+              <PermissionGuard permission={Permission.ACCOUNTS_VIEW}>
+                <InstallmentDetailPage />
+              </PermissionGuard>
+            ),
+          },
+          {
+            path: '/installments/:id/edit',
+            element: (
+              <PermissionGuard permission={Permission.ACCOUNTS_UPDATE}>
+                <InstallmentEditPage />
               </PermissionGuard>
             ),
           },

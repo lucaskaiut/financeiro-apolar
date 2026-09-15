@@ -18,6 +18,7 @@ export interface DataTableProps<T> {
   skeletonRows?: number
   emptyState?: ReactNode
   caption?: string
+  onRowClick?: (row: T) => void
 }
 
 export function DataTable<T>({
@@ -28,6 +29,7 @@ export function DataTable<T>({
   skeletonRows = 5,
   emptyState,
   caption,
+  onRowClick,
 }: DataTableProps<T>) {
   const showEmpty = !loading && rows.length === 0
 
@@ -59,7 +61,19 @@ export function DataTable<T>({
               : rows.map((row) => (
                   <tr
                     key={rowKey(row)}
-                    className="shadow-[inset_0_1px_0_var(--app-surface-2)] transition-colors hover:bg-surface-2/40"
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                    onKeyDown={onRowClick ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onRowClick(row)
+                      }
+                    } : undefined}
+                    tabIndex={onRowClick ? 0 : undefined}
+                    role={onRowClick ? 'button' : undefined}
+                    className={cn(
+                      'shadow-[inset_0_1px_0_var(--app-surface-2)] transition-colors',
+                      onRowClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary hover:bg-surface-2/40',
+                    )}
                   >
                     {columns.map((column) => (
                       <td key={column.key} className={cn('px-5 py-3.5 align-middle', column.className)}>

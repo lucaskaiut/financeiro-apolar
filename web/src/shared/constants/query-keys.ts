@@ -60,6 +60,12 @@ export const queryKeys = {
     detail: (id: string) => ['recurrences', 'detail', id] as const,
   },
 
+  installments: {
+    all: ['installments'] as const,
+    list: (params: ListParams) => ['installments', 'list', params] as const,
+    detail: (id: string) => ['installments', 'detail', id] as const,
+  },
+
   transfers: {
     all: ['transfers'] as const,
     list: (params: ListParams) => ['transfers', 'list', params] as const,

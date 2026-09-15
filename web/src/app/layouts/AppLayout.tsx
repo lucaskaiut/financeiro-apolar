@@ -6,6 +6,7 @@ import {
   BookOpenCheck,
   Bot,
   Building2,
+  CalendarRange,
   CreditCard,
   LayoutDashboard,
   Landmark,
@@ -89,6 +90,9 @@ function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
         )}
         {can(Permission.ACCOUNTS_VIEW) && (
           <SidebarItem to="/accounts" icon={Wallet} label="Contas a pagar/receber" onNavigate={onNavigate} />
+        )}
+        {can(Permission.ACCOUNTS_VIEW) && (
+          <SidebarItem to="/installments" icon={CalendarRange} label="Parcelamentos" onNavigate={onNavigate} />
         )}
         {can(Permission.RECURRENCES_VIEW) && (
           <SidebarItem to="/recurrences" icon={Repeat} label="Recorrências" onNavigate={onNavigate} />

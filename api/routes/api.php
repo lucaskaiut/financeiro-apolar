@@ -14,6 +14,7 @@ use App\Modules\Company\Http\Controllers\CompanyController;
 use App\Modules\CostCenter\Http\Controllers\CostCenterController;
 use App\Modules\CreditCard\Http\Controllers\CreditCardController;
 use App\Modules\Dashboard\Http\Controllers\DashboardController;
+use App\Modules\Installment\Http\Controllers\InstallmentController;
 use App\Modules\Reconciliation\Http\Controllers\ReconciliationController;
 use App\Modules\Recurrence\Http\Controllers\RecurrenceController;
 use App\Modules\Report\Http\Controllers\ReportController;
@@ -101,6 +102,10 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::post('accounts/{account}/documents', [AccountController::class, 'storeDocuments'])->middleware('permission:accounts.update');
     Route::get('accounts/{account}/documents/{document}/download', [AccountController::class, 'downloadDocument'])->middleware('permission:accounts.view');
     Route::delete('accounts/{account}/documents/{document}', [AccountController::class, 'destroyDocument'])->middleware('permission:accounts.update');
+
+    Route::get('installments', [InstallmentController::class, 'index'])->middleware('permission:accounts.view');
+    Route::get('installments/{group}', [InstallmentController::class, 'show'])->middleware('permission:accounts.view');
+    Route::match(['put', 'patch'], 'installments/{group}', [InstallmentController::class, 'update'])->middleware('permission:accounts.update');
 
     Route::get('recurrences', [RecurrenceController::class, 'index'])->middleware('permission:recurrences.view');
     Route::post('recurrences', [RecurrenceController::class, 'store'])->middleware('permission:recurrences.create');

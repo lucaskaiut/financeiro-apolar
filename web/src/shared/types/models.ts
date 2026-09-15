@@ -165,6 +165,38 @@ export interface Account {
   updated_at: string | null
 }
 
+export interface InstallmentGroup {
+  id: string
+  description: string
+  counterparty: string | null
+  type: 'payable' | 'receivable'
+  type_label: string
+  bank_account: string | null
+  category: string | null
+  subcategory: string | null
+  installments_count: number
+  installment_total: number
+  total_value: number
+  first_due_date: string
+  last_due_date: string
+  settled_count: number
+  cancelled_count: number
+  is_card_purchase: boolean
+}
+
+export interface InstallmentDetail extends InstallmentGroup {
+  bank_account_id: string | null
+  company_id: string | null
+  company: string | null
+  cost_center_id: string | null
+  cost_center: string | null
+  category_id: string | null
+  subcategory_id: string | null
+  expected_date: string | null
+  observation: string | null
+  installments: Account[]
+}
+
 export interface Recurrence {
   id: string
   type: string
