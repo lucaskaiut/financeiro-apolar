@@ -22,7 +22,6 @@ import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
 import { cn } from '@/shared/utils/cn'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
-import { useCompanyOptions } from '@/modules/companies/hooks/useCompanies'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
 import { accountSchema, type AccountFormValues } from '../schemas/account.schema'
@@ -82,7 +81,6 @@ export function AccountForm({
       counterparty: '',
       bank_account_id: '',
       credit_card_id: '',
-      company_id: '',
       cost_center_id: '',
       category_id: '',
       subcategory_id: '',
@@ -117,7 +115,6 @@ export function AccountForm({
 
   const bankAccounts = useBankAccountOptions()
   const creditCards = useCreditCardOptions()
-  const companies = useCompanyOptions()
   const costCenters = useCostCenterOptions()
 
   useEffect(() => {
@@ -136,7 +133,6 @@ export function AccountForm({
       type: hasCreditCard ? 'payable' : values.type,
       description: values.description,
       counterparty: values.counterparty || null,
-      company_id: values.company_id || null,
       cost_center_id: values.split ? null : values.cost_center_id || null,
       category_id: values.split ? null : values.category_id,
       subcategory_id: values.split ? null : values.subcategory_id || null,
@@ -236,12 +232,6 @@ export function AccountForm({
                 hint="Se informado, o vencimento segue o ciclo da fatura do cartão."
               />
             )}
-            <SelectField
-              name="company_id"
-              label="Empresa"
-              options={companies.data ?? []}
-              placeholder="Opcional"
-            />
           </div>
         </FormSection>
 
@@ -284,7 +274,8 @@ export function AccountForm({
                   name="cost_center_id"
                   label="Centro de custo"
                   options={costCenters.data ?? []}
-                  placeholder="Opcional"
+                  placeholder="Selecione"
+                  required
                 />
               </>
             )}

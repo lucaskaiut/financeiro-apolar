@@ -8,7 +8,6 @@ export function accountToCloneFormValues(account: Account): Partial<AccountFormV
     counterparty: account.counterparty ?? '',
     bank_account_id: account.bank_account_id ?? '',
     credit_card_id: account.credit_card_id ?? '',
-    company_id: account.company_id ?? '',
     cost_center_id: account.cost_center_id ?? '',
     category_id: account.category_id ?? '',
     subcategory_id: account.subcategory_id ?? '',

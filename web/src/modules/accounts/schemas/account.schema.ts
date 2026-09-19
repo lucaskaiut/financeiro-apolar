@@ -31,7 +31,6 @@ export const accountSchema = z
     counterparty: z.string(),
     bank_account_id: z.string(),
     credit_card_id: z.string(),
-    company_id: z.string(),
     cost_center_id: z.string(),
     category_id: z.string(),
     subcategory_id: z.string(),
@@ -109,8 +108,14 @@ export const accountSchema = z
           message: 'A soma do rateio deve ser igual ao valor do lançamento.',
         })
       }
-    } else if (!data.category_id) {
-      ctx.addIssue({ code: 'custom', path: ['category_id'], message: 'Selecione a categoria' })
+    } else {
+      if (!data.category_id) {
+        ctx.addIssue({ code: 'custom', path: ['category_id'], message: 'Selecione a categoria' })
+      }
+
+      if (!data.cost_center_id) {
+        ctx.addIssue({ code: 'custom', path: ['cost_center_id'], message: 'Selecione o centro de custo' })
+      }
     }
 
     if (data.installments && data.customize_installments) {

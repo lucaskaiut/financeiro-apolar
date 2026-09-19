@@ -87,7 +87,6 @@ export default function AccountEditPage() {
                 counterparty: query.data.counterparty ?? '',
                 bank_account_id: query.data.bank_account_id ?? '',
                 credit_card_id: query.data.credit_card_id ?? '',
-                company_id: query.data.company_id ?? '',
                 cost_center_id: query.data.cost_center_id ?? '',
                 category_id: query.data.category_id ?? '',
                 subcategory_id: query.data.subcategory_id ?? '',
