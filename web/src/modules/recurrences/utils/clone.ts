@@ -7,6 +7,7 @@ export function recurrenceToCloneFormValues(recurrence: Recurrence): Partial<Rec
     description: recurrence.description,
     counterparty: recurrence.counterparty ?? '',
     bank_account_id: recurrence.bank_account_id ?? '',
+    cost_center_id: recurrence.cost_center_id ?? '',
     category_id: recurrence.category_id ?? '',
     subcategory_id: recurrence.subcategory_id ?? '',
     value: String(recurrence.value),

@@ -20,6 +20,7 @@ import {
 import { isApiError } from '@/shared/api/errors'
 import { applyApiErrorsToForm } from '@/shared/utils/forms'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { recurrenceSchema, type RecurrenceFormValues } from '../schemas/recurrence.schema'
 import type { RecurrencePayload } from '../services/recurrences.service'
 
@@ -49,6 +50,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
       description: '',
       counterparty: '',
       bank_account_id: '',
+      cost_center_id: '',
       category_id: '',
       subcategory_id: '',
       value: '',
@@ -67,7 +69,8 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
   const type = form.watch('type')
   const categoryType = type === 'receivable' ? 'income' : 'expense'
 
-  const costCenters = useBankAccountOptions()
+  const bankAccounts = useBankAccountOptions()
+  const costCenters = useCostCenterOptions()
 
   const categoryId = form.watch('category_id')
 
@@ -78,6 +81,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
         description: values.description,
         counterparty: values.counterparty || null,
         bank_account_id: values.bank_account_id,
+        cost_center_id: values.cost_center_id || null,
         category_id: values.category_id,
         subcategory_id: values.subcategory_id || null,
         value: Number(values.value),
@@ -113,7 +117,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField name="description" label="Descrição" required className="sm:col-span-2" />
               <TextField name="counterparty" label={type === 'receivable' ? 'Cliente' : 'Fornecedor'} className="sm:col-span-2" />
-              <SelectField name="bank_account_id" label="Conta bancária" options={costCenters.data ?? []} placeholder="Selecione" required />
+              <SelectField name="bank_account_id" label="Conta bancária" options={bankAccounts.data ?? []} placeholder="Selecione" required />
               <CategorySearchSelectField
                 name="category_id"
                 label="Categoria"
@@ -135,6 +139,7 @@ export function RecurrenceForm({ mode, defaultValues, submitting, onSubmit }: Re
                 onCategoryChange={(parentId) => form.setValue('category_id', parentId)}
                 onSelectOption={(option) => setSelectedSubcategory(option)}
               />
+              <SelectField name="cost_center_id" label="Centro de custo" options={costCenters.data ?? []} placeholder="Selecione" required />
               <TextField name="value" label="Valor" type="number" step="0.01" min="0" required />
               <SelectField name="frequency" label="Frequência" options={FREQUENCY_OPTIONS} required />
               <TextField name="start_date" label="Data inicial" type="date" required />

@@ -7,6 +7,7 @@ export interface RecurrencePayload {
   description: string
   counterparty?: string | null
   bank_account_id: string
+  cost_center_id?: string | null
   category_id: string
   subcategory_id?: string | null
   value: number

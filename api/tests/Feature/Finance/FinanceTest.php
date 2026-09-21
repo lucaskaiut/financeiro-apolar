@@ -596,11 +596,13 @@ class FinanceTest extends TestCase
 
         $costCenterId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
+        $workCostCenterId = $this->createCostCenter();
 
         $this->postJson('/api/recurrences', [
             'type' => 'payable',
             'description' => 'Internet',
             'bank_account_id' => $costCenterId,
+            'cost_center_id' => $workCostCenterId,
             'category_id' => $categoryId,
             'value' => 200,
             'frequency' => 'monthly',
@@ -614,6 +616,7 @@ class FinanceTest extends TestCase
         $this->assertCount(12, $accounts);
         $this->assertTrue($accounts->every(fn ($a) => $a->recurrence_id !== null));
         $this->assertTrue($accounts->every(fn ($a) => $a->due_date->day === 10));
+        $this->assertTrue($accounts->every(fn ($a) => $a->cost_center_id === $workCostCenterId));
     }
 
     public function test_transfer_creates_two_movements(): void
@@ -1904,11 +1907,13 @@ OFX;
 
         $bankAccountId = $this->createBankAccount();
         $categoryId = $this->createCategory('expense');
+        $workCostCenterId = $this->createCostCenter('Administrativo');
 
         $recurrenceId = $this->postJson('/api/recurrences', [
             'type' => 'payable',
             'description' => 'Internet',
             'bank_account_id' => $bankAccountId,
+            'cost_center_id' => $workCostCenterId,
             'category_id' => $categoryId,
             'value' => 200,
             'frequency' => 'monthly',
@@ -1920,11 +1925,14 @@ OFX;
         $this->getJson("/api/recurrences/{$recurrenceId}")
             ->assertOk()
             ->assertJsonPath('data.bank_account_id', $bankAccountId)
+            ->assertJsonPath('data.cost_center_id', $workCostCenterId)
+            ->assertJsonPath('data.cost_center', 'Administrativo')
             ->assertJsonPath('data.description', 'Internet');
 
         $this->getJson('/api/recurrences')
             ->assertOk()
-            ->assertJsonPath('data.0.bank_account_id', $bankAccountId);
+            ->assertJsonPath('data.0.bank_account_id', $bankAccountId)
+            ->assertJsonPath('data.0.cost_center_id', $workCostCenterId);
     }
 
     public function test_card_purchase_can_be_updated_without_bank_account(): void

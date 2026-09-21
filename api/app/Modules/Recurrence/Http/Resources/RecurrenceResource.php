@@ -23,6 +23,8 @@ class RecurrenceResource extends JsonResource
             'counterparty' => $this->counterparty,
             'bank_account_id' => $this->bankAccount?->uuid,
             'bank_account' => $this->whenLoaded('bankAccount', fn () => $this->bankAccount?->name),
+            'cost_center_id' => $this->costCenter?->uuid,
+            'cost_center' => $this->whenLoaded('costCenter', fn () => $this->costCenter?->name),
             'category_id' => $this->category?->uuid,
             'category' => $this->whenLoaded('category', fn () => $this->category?->name),
             'subcategory_id' => $this->subcategory?->uuid,

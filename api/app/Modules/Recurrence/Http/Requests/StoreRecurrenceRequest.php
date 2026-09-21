@@ -30,6 +30,11 @@ class StoreRecurrenceRequest extends FormRequest
                 'string',
                 Rule::exists('bank_accounts', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
             ],
+            'cost_center_id' => [
+                'nullable',
+                'string',
+                Rule::exists('cost_centers', 'uuid')->where(fn ($q) => $q->where('tenant_id', TenantContext::tenantId())),
+            ],
             'category_id' => [
                 'required',
                 'string',

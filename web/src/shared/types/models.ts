@@ -204,6 +204,8 @@ export interface Recurrence {
   counterparty: string | null
   bank_account_id: string | null
   bank_account: string | null
+  cost_center_id: string | null
+  cost_center: string | null
   category_id: string | null
   category: string | null
   subcategory_id: string | null
