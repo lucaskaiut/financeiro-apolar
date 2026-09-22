@@ -1,6 +1,7 @@
 import { http } from '@/shared/api/http'
 import type { ApiResponse, PaginatedResponse } from '@/shared/types/api'
 import type { Account, BankTransaction } from '@/shared/types/models'
+import type { AccountPayload } from '@/modules/accounts/services/accounts.service'
 
 export interface ReconciliationListParams {
   page?: number
@@ -8,6 +9,8 @@ export interface ReconciliationListParams {
   status?: string
   bank_account_id?: string
 }
+
+export type CreateFromTransactionPayload = AccountPayload & { account_ids?: string[] }
 
 export const reconciliationService = {
   async list(params: ReconciliationListParams): Promise<PaginatedResponse<BankTransaction>> {
@@ -94,19 +97,7 @@ export const reconciliationService = {
     return response.data.data
   },
 
-  async createAccount(
-    id: string,
-    payload: {
-      type: 'payable' | 'receivable'
-      description: string
-      category_id: string
-      bank_account_id?: string
-      cost_center_id?: string | null
-      value?: number
-      due_date?: string
-      account_ids?: string[]
-    },
-  ): Promise<Account> {
+  async createAccount(id: string, payload: CreateFromTransactionPayload): Promise<Account> {
     const response = await http.post<ApiResponse<Account>>(`/reconciliation/transactions/${id}/create-account`, payload)
 
     return response.data.data

@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useEffect, useMemo, useState } from 'react'
 import { Link2, Plus, Search } from 'lucide-react'
 import {
   Alert,
@@ -12,32 +9,18 @@ import {
   Form,
   Input,
   Modal,
-  RadioGroupField,
-  SearchSelectField,
-  SelectField,
   Skeleton,
-  TextField,
-  type SearchSelectOption,
 } from '@/shared/design-system'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
 import { toast } from '@/shared/stores/toast.store'
-import { CategorySearchSelectField } from '@/modules/categories/components/CategorySearchSelect'
-import { costCentersService } from '@/modules/cost-centers/services/cost-centers.service'
-import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
+import { isApiError } from '@/shared/api/errors'
+import { applyApiErrorsToForm } from '@/shared/utils/forms'
+import { AccountFormFields } from '@/modules/accounts/forms/AccountFormFields'
+import { buildAccountPayload, useAccountForm } from '@/modules/accounts/forms/useAccountForm'
+import { accountsService } from '@/modules/accounts/services/accounts.service'
+import { emptyAccountFormValues, type AccountFormValues } from '@/modules/accounts/schemas/account.schema'
 import type { Account, BankTransaction } from '@/shared/types/models'
 import { useCandidates, useCreateAccountFromTransaction, useReconcileMany } from '../hooks/useReconciliation'
-
-const createSchema = z.object({
-  type: z.enum(['payable', 'receivable']),
-  description: z.string().min(1, 'Informe a descrição'),
-  category_id: z.string().min(1, 'Selecione a categoria'),
-  bank_account_id: z.string().min(1, 'Selecione o conta bancária'),
-  cost_center_id: z.string(),
-  value: z.string().refine((v) => v !== '' && Number(v) > 0, 'Informe um valor válido'),
-  due_date: z.string().min(1, 'Informe a data'),
-})
-
-type CreateFormValues = z.infer<typeof createSchema>
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100
@@ -45,6 +28,16 @@ function roundMoney(value: number): number {
 
 function willChangeBankAccount(account: Account, transaction: BankTransaction): boolean {
   return Boolean(transaction.bank_account_id) && account.bank_account_id !== transaction.bank_account_id
+}
+
+function transactionFormValues(transaction: BankTransaction, value?: number): AccountFormValues {
+  return emptyAccountFormValues({
+    type: transaction.type === 'credit' ? 'receivable' : 'payable',
+    description: transaction.description ?? '',
+    bank_account_id: transaction.bank_account_id ?? '',
+    value: String(value ?? transaction.value ?? ''),
+    due_date: transaction.date ?? '',
+  })
 }
 
 export function MatchDialog({
@@ -63,26 +56,15 @@ export function MatchDialog({
   const candidates = useCandidates(open && transaction ? transaction.id : undefined, from || undefined, to || undefined, false)
   const reconcileMany = useReconcileMany()
   const createAccount = useCreateAccountFromTransaction()
-  const bankAccounts = useBankAccountOptions()
 
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [confirmAction, setConfirmAction] = useState<'reconcile' | 'create' | null>(null)
-  const [pendingCreate, setPendingCreate] = useState<CreateFormValues | null>(null)
+  const [pendingCreate, setPendingCreate] = useState<AccountFormValues | null>(null)
+  const [documents, setDocuments] = useState<File[]>([])
 
-  const form = useForm<CreateFormValues>({
-    resolver: zodResolver(createSchema),
-    defaultValues: {
-      type: 'payable',
-      description: '',
-      category_id: '',
-      bank_account_id: '',
-      cost_center_id: '',
-      value: '',
-      due_date: '',
-    },
-  })
+  const form = useAccountForm({ mode: 'create' })
 
   useEffect(() => {
     if (!open) return
@@ -92,44 +74,14 @@ export function MatchDialog({
     setSelectedIds([])
     setConfirmAction(null)
     setPendingCreate(null)
+    setDocuments([])
   }, [open, transaction?.id])
 
   useEffect(() => {
     if (!transaction) return
 
-    form.reset({
-      type: transaction.type === 'credit' ? 'receivable' : 'payable',
-      description: transaction.description ?? '',
-      category_id: '',
-      bank_account_id: transaction.bank_account_id ?? '',
-      cost_center_id: '',
-      value: String(transaction.value ?? ''),
-      due_date: transaction.date ?? '',
-    })
+    form.reset(transactionFormValues(transaction))
   }, [transaction, form])
-
-  const type = form.watch('type')
-  const categoryType = type === 'receivable' ? 'income' : 'expense'
-
-  const loadCostCenters = useCallback(async (searchTerm: string): Promise<SearchSelectOption[]> => {
-    const result = await costCentersService.list({
-      search: searchTerm || undefined,
-      per_page: 50,
-    })
-
-    return result.data
-      .filter((costCenter) => costCenter.status === 'active')
-      .map((costCenter) => ({ value: costCenter.id, label: costCenter.name }))
-  }, [])
-
-  const resolveCostCenterLabel = useCallback(async (id: string): Promise<SearchSelectOption | null> => {
-    try {
-      const costCenter = await costCentersService.get(id)
-      return { value: costCenter.id, label: costCenter.name }
-    } catch {
-      return null
-    }
-  }, [])
 
   const accounts = candidates.data?.candidates ?? []
   const txValue = transaction ? roundMoney(transaction.value) : 0
@@ -191,15 +143,8 @@ export function MatchDialog({
 
     const nextValue = selectedIds.length > 0 ? difference : txValue
 
-    form.reset({
-      type: transaction.type === 'credit' ? 'receivable' : 'payable',
-      description: transaction.description ?? '',
-      category_id: '',
-      bank_account_id: transaction.bank_account_id ?? '',
-      cost_center_id: '',
-      value: String(nextValue),
-      due_date: transaction.date ?? '',
-    })
+    form.reset(transactionFormValues(transaction, nextValue))
+    setDocuments([])
     setCreating(true)
   }
 
@@ -214,7 +159,7 @@ export function MatchDialog({
     onClose()
   }
 
-  const submitCreate = async (values: CreateFormValues) => {
+  const submitCreate = async (values: AccountFormValues) => {
     if (!transaction) return
 
     const createdValue = roundMoney(Number(values.value))
@@ -233,19 +178,35 @@ export function MatchDialog({
       return
     }
 
-    await createAccount.mutateAsync({
-      id: transaction.id,
-      payload: {
-        type: values.type,
-        description: values.description,
-        category_id: values.category_id,
-        bank_account_id: transaction.bank_account_id || values.bank_account_id || undefined,
-        cost_center_id: values.cost_center_id || null,
-        value: createdValue,
-        due_date: values.due_date,
-        account_ids: selectedIds.length > 0 ? selectedIds : undefined,
-      },
-    })
+    const payload = buildAccountPayload(values, { mode: 'create' })
+
+    try {
+      const created = await createAccount.mutateAsync({
+        id: transaction.id,
+        payload: {
+          ...payload,
+          account_ids: selectedIds.length > 0 ? selectedIds : undefined,
+        },
+      })
+
+      if (documents.length > 0) {
+        try {
+          await accountsService.uploadDocuments(created.id, documents)
+          toast.success(
+            'Documentos anexados',
+            documents.length > 1 ? `${documents.length} documentos anexados com sucesso.` : 'Documento anexado com sucesso.',
+          )
+        } catch (error) {
+          toast.error('Falha ao anexar', isApiError(error) ? error.message : 'Os documentos não foram anexados.')
+        }
+      }
+    } catch (error) {
+      if (isApiError(error) && error.status === 422) {
+        applyApiErrorsToForm(form, error)
+      }
+      return
+    }
+
     setConfirmAction(null)
     setPendingCreate(null)
     onClose()
@@ -262,7 +223,7 @@ export function MatchDialog({
     await submitReconciliation()
   }
 
-  const handleCreate = async (values: CreateFormValues) => {
+  const handleCreate = async (values: AccountFormValues) => {
     if (!transaction) return
 
     if (selectedIds.length > 0 && accountsChangingBank.length > 0) {
@@ -341,7 +302,7 @@ export function MatchDialog({
             ? `Transação de ${formatCurrency(transaction.value)} em ${formatDate(transaction.date)} (${targetBankName}). Selecione uma ou mais contas cuja soma seja igual ao valor.`
             : undefined
         }
-        size="lg"
+        size="xl"
         footer={
           !creating ? (
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -437,33 +398,14 @@ export function MatchDialog({
               </Alert>
             )}
 
-            <RadioGroupField
-              name="type"
-              options={[
-                { value: 'payable', label: 'Despesa' },
-                { value: 'receivable', label: 'Receita' },
-              ]}
+            <AccountFormFields
+              mode="create"
+              allowCreditCard={false}
+              documents={documents}
+              onDocumentsChange={setDocuments}
+              submitting={createAccount.isPending}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField name="value" label="Valor" type="number" step="0.01" min="0" required />
-              <TextField name="due_date" label="Data de vencimento" type="date" required />
-            </div>
-            <SelectField name="bank_account_id" label="Conta bancária" options={bankAccounts.data ?? []} placeholder="Selecione" required />
-            <SearchSelectField
-              name="cost_center_id"
-              label="Centro de custo"
-              loadOptions={loadCostCenters}
-              resolveLabel={resolveCostCenterLabel}
-              placeholder="Buscar centro de custo..."
-              emptyMessage="Nenhum centro de custo encontrado"
-            />
-            <TextField name="description" label="Descrição" required />
-            <CategorySearchSelectField
-              name="category_id"
-              label="Categoria"
-              categoryType={categoryType}
-              required
-            />
+
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button variant="secondary" onClick={() => setCreating(false)}>
                 Voltar

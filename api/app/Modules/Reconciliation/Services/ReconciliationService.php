@@ -311,12 +311,14 @@ class ReconciliationService
     /**
      * Cria uma receita ou despesa a partir de uma transação (RF019).
      *
-     * Quando `account_ids` é informado, cria o lançamento complementar e concilia
-     * o extrato com as contas selecionadas + a nova, exigindo que a soma feche.
+     * O lançamento segue as mesmas regras da tela de contas (parcelamento, rateio,
+     * subcategoria, observações etc.). Quando `account_ids` é informado, cria o
+     * lançamento complementar e concilia o extrato com as contas selecionadas + as novas.
      *
-     * @param  array{type: string, description: string, category_id: string, bank_account_id?: ?string, cost_center_id?: ?string, value?: ?numeric, due_date?: ?string, observation?: ?string, account_ids?: list<string>}  $data
+     * @param  array<string, mixed>  $data
+     * @return list<FinancialAccount>
      */
-    public function createFromTransaction(BankTransaction $transaction, array $data, User $user): FinancialAccount
+    public function createFromTransaction(BankTransaction $transaction, array $data, User $user): array
     {
         if ($transaction->status === 'matched') {
             throw new InvalidArgumentException('Transação já conciliada.');
@@ -325,76 +327,60 @@ class ReconciliationService
         $accountIds = array_values(array_unique($data['account_ids'] ?? []));
         unset($data['account_ids']);
 
-        return DB::transaction(function () use ($transaction, $data, $user, $accountIds): FinancialAccount {
-            $value = round((float) ($data['value'] ?? $transaction->value), 2);
-            $costCenterId = $data['cost_center_id'] ?? null;
+        return DB::transaction(function () use ($transaction, $data, $user, $accountIds): array {
+            $data['value'] = isset($data['value'])
+                ? round((float) $data['value'], 2)
+                : round((float) $transaction->value, 2);
+            $data['bank_account_id'] ??= $transaction->bank_account_id;
+            $data['due_date'] ??= $transaction->date->toDateString();
+
+            $created = $this->accounts->create($data);
+            $createdTotal = round(array_sum(array_map(
+                fn (FinancialAccount $account) => (float) $account->value,
+                $created,
+            )), 2);
 
             if ($accountIds === []) {
-                if (abs($value - (float) $transaction->value) >= 0.01) {
+                if (abs($createdTotal - (float) $transaction->value) >= 0.01) {
                     throw new InvalidArgumentException('O valor do lançamento deve ser igual ao valor da transação do extrato.');
                 }
+            } else {
+                $selectedAccounts = FinancialAccount::query()
+                    ->withSum('settlements', 'value')
+                    ->whereIn('uuid', $accountIds)
+                    ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
+                    ->where('is_card_purchase', false)
+                    ->get();
 
-                $account = FinancialAccount::query()->create([
-                    'type' => $data['type'],
-                    'description' => $data['description'],
-                    'bank_account_id' => $data['bank_account_id'] ?? $transaction->bank_account_id,
-                    'cost_center_id' => $costCenterId,
-                    'category_id' => $data['category_id'],
-                    'value' => $value,
-                    'due_date' => $data['due_date'] ?? $transaction->date->toDateString(),
-                    'observation' => $data['observation'] ?? null,
-                    'status' => AccountStatus::Open,
-                ]);
+                if ($selectedAccounts->count() !== count($accountIds)) {
+                    throw new InvalidArgumentException('Uma ou mais contas selecionadas não estão disponíveis.');
+                }
 
-                $this->link($transaction, $account, $user);
+                $selectedTotal = round($selectedAccounts->sum(fn (FinancialAccount $account) => $account->remaining_amount), 2);
+                $combinedTotal = round($selectedTotal + $createdTotal, 2);
 
-                return $account->refresh();
+                if (abs($combinedTotal - (float) $transaction->value) >= 0.01) {
+                    throw new InvalidArgumentException(
+                        sprintf(
+                            'A soma das contas selecionadas (R$ %s) com o novo lançamento (R$ %s) deve ser igual ao valor do extrato (R$ %s).',
+                            number_format($selectedTotal, 2, ',', '.'),
+                            number_format($createdTotal, 2, ',', '.'),
+                            number_format((float) $transaction->value, 2, ',', '.'),
+                        ),
+                    );
+                }
             }
-
-            $selectedAccounts = FinancialAccount::query()
-                ->withSum('settlements', 'value')
-                ->whereIn('uuid', $accountIds)
-                ->whereIn('status', [AccountStatus::Open->value, AccountStatus::Partial->value])
-                ->where('is_card_purchase', false)
-                ->get();
-
-            if ($selectedAccounts->count() !== count($accountIds)) {
-                throw new InvalidArgumentException('Uma ou mais contas selecionadas não estão disponíveis.');
-            }
-
-            $selectedTotal = round($selectedAccounts->sum(fn (FinancialAccount $account) => $account->remaining_amount), 2);
-            $combinedTotal = round($selectedTotal + $value, 2);
-
-            if (abs($combinedTotal - (float) $transaction->value) >= 0.01) {
-                throw new InvalidArgumentException(
-                    sprintf(
-                        'A soma das contas selecionadas (R$ %s) com o novo lançamento (R$ %s) deve ser igual ao valor do extrato (R$ %s).',
-                        number_format($selectedTotal, 2, ',', '.'),
-                        number_format($value, 2, ',', '.'),
-                        number_format((float) $transaction->value, 2, ',', '.'),
-                    ),
-                );
-            }
-
-            $account = FinancialAccount::query()->create([
-                'type' => $data['type'],
-                'description' => $data['description'],
-                'bank_account_id' => $transaction->bank_account_id,
-                'cost_center_id' => $costCenterId,
-                'category_id' => $data['category_id'],
-                'value' => $value,
-                'due_date' => $data['due_date'] ?? $transaction->date->toDateString(),
-                'observation' => $data['observation'] ?? null,
-                'status' => AccountStatus::Open,
-            ]);
 
             $this->reconcileMany(
                 [$transaction->uuid],
-                [...$accountIds, $account->uuid],
+                [
+                    ...$accountIds,
+                    ...array_map(fn (FinancialAccount $account) => $account->uuid, $created),
+                ],
                 $user,
             );
 
-            return $account->refresh()->load(['bankAccount:id,uuid,name', 'costCenter:id,uuid,name', 'category:id,uuid,name']);
+            return $created;
         });
     }
 

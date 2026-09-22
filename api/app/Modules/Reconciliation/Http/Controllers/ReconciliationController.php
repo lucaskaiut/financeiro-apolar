@@ -172,23 +172,30 @@ class ReconciliationController extends ApiController
     public function createAccount(CreateFromTransactionRequest $request, BankTransaction $transaction): JsonResponse
     {
         try {
-            $account = $this->service->createFromTransaction($transaction, $request->validated(), $request->user());
+            $accounts = $this->service->createFromTransaction($transaction, $request->validated(), $request->user());
         } catch (\InvalidArgumentException $e) {
             throw ValidationException::withMessages(['value' => [$e->getMessage()]]);
         }
 
-        $this->audit->recordEntity(
-            $request->user(),
-            AuditAction::ReconciliationExecute,
-            'bank_transaction',
-            $transaction->uuid,
-            [
-                'account' => $account->uuid,
-                'account_ids' => $request->input('account_ids', []),
-            ],
-        );
+        foreach ($accounts as $account) {
+            $this->audit->recordEntity(
+                $request->user(),
+                AuditAction::ReconciliationExecute,
+                'bank_transaction',
+                $transaction->uuid,
+                [
+                    'account' => $account->uuid,
+                    'account_ids' => $request->input('account_ids', []),
+                ],
+            );
+        }
 
-        return $this->created(AccountResource::make($account->load(['costCenter:id,uuid,name', 'category:id,uuid,name', 'bankAccount:id,uuid,name'])), 'Lançamento criado a partir do extrato.');
+        $account = $accounts[0];
+
+        return $this->created(
+            AccountResource::make($account->load(['costCenter:id,uuid,name', 'category:id,uuid,name', 'bankAccount:id,uuid,name'])),
+            count($accounts) > 1 ? 'Parcelamento criado e conciliado.' : 'Lançamento criado a partir do extrato.',
+        );
     }
 
     public function undo(Request $request, BankTransaction $transaction): JsonResponse

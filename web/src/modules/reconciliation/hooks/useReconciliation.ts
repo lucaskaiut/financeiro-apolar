@@ -1,7 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/shared/constants/query-keys'
 import { toast } from '@/shared/stores/toast.store'
-import { reconciliationService, type ReconciliationListParams } from '../services/reconciliation.service'
+import {
+  reconciliationService,
+  type CreateFromTransactionPayload,
+  type ReconciliationListParams,
+} from '../services/reconciliation.service'
 
 export function useReconciliationQuery(params: ReconciliationListParams) {
   return useQuery({
@@ -128,22 +132,8 @@ export function useCreateAccountFromTransaction() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string
-      payload: {
-        type: 'payable' | 'receivable'
-        description: string
-        category_id: string
-        bank_account_id?: string
-        cost_center_id?: string | null
-        value?: number
-        due_date?: string
-        account_ids?: string[]
-      }
-    }) => reconciliationService.createAccount(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: CreateFromTransactionPayload }) =>
+      reconciliationService.createAccount(id, payload),
     onSuccess: (_data, variables) => {
       invalidate(queryClient)
       const linked = variables.payload.account_ids?.length ?? 0

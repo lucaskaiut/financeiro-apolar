@@ -16,11 +16,12 @@ export function useCreditCardsQuery(params: ListParams) {
   })
 }
 
-export function useCreditCardOptions() {
+export function useCreditCardOptions(enabled = true) {
   return useQuery({
     queryKey: queryKeys.creditCards.list({ per_page: 100 }),
     queryFn: () => creditCardsService.list({ per_page: 100 }),
     select: (data) => data.data.map((c) => ({ value: c.id, label: c.name })),
+    enabled,
   })
 }
 

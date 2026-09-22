@@ -627,7 +627,7 @@ A conciliação confirma que o que está no sistema bate com o que o banco regis
 | **Ignorar** | Marca a transação para não conciliar (ex.: tarifa já tratada de outro jeito) |
 | **Desfazer** | Reabre uma conciliação já feita |
 
-Na conciliação **manual**, você escolhe lançamentos candidatos ou **cria** um lançamento a partir da transação (tipo, descrição, categoria, conta bancária, centro de custo, valor e vencimento).
+Na conciliação **manual**, você escolhe lançamentos candidatos ou **cria** um lançamento a partir da transação usando o mesmo formulário da tela de contas (descrição, contraparte, categoria, subcategoria, centro de custo, valor, datas, observações, rateio, parcelamento e documentos).
 
 Se a conta bancária do lançamento for diferente da conta do extrato, o sistema avisa.
 

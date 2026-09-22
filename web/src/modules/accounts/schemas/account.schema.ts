@@ -24,6 +24,31 @@ export const emptyInstallmentLine = (): InstallmentLineValues => ({
   due_date: '',
 })
 
+export const emptyAccountFormValues = (overrides: Partial<AccountFormValues> = {}): AccountFormValues => ({
+  type: 'payable',
+  description: '',
+  counterparty: '',
+  bank_account_id: '',
+  credit_card_id: '',
+  cost_center_id: '',
+  category_id: '',
+  subcategory_id: '',
+  value: '',
+  due_date: '',
+  purchase_date: '',
+  expected_date: '',
+  paid_date: '',
+  observation: '',
+  installments: false,
+  installment_quantity: '2',
+  installment_interval: 'monthly',
+  customize_installments: false,
+  installment_items: [],
+  split: false,
+  allocations: [],
+  ...overrides,
+})
+
 export const accountSchema = z
   .object({
     type: z.enum(['payable', 'receivable']),
