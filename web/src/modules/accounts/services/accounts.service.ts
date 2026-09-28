@@ -2,6 +2,7 @@ import { http } from '@/shared/api/http'
 import type { ApiResponse, PaginatedResponse } from '@/shared/types/api'
 import type { Account, AccountDocument } from '@/shared/types/models'
 import type { AccountListParams } from '@/shared/constants/query-keys'
+import { downloadBlob } from '@/shared/utils/report-export'
 
 export interface AccountPayload {
   type: 'payable' | 'receivable'
@@ -42,6 +43,29 @@ export const accountsService = {
     const response = await http.get<PaginatedResponse<Account>>('/accounts', { params })
 
     return response.data
+  },
+
+  async listAll(params: AccountListParams): Promise<Account[]> {
+    const perPage = 200
+    const first = await this.list({ ...params, page: 1, per_page: perPage })
+
+    if (first.meta.last_page <= 1) {
+      return first.data
+    }
+
+    const remaining = await Promise.all(
+      Array.from({ length: first.meta.last_page - 1 }, (_, index) =>
+        this.list({ ...params, page: index + 2, per_page: perPage }),
+      ),
+    )
+
+    return [...first.data, ...remaining.flatMap((response) => response.data)]
+  },
+
+  async exportXlsx(params: AccountListParams): Promise<void> {
+    const response = await http.get<Blob>('/accounts/export', { params, responseType: 'blob' })
+
+    downloadBlob(response.data, 'contas-a-pagar-receber.xlsx')
   },
 
   async get(id: string): Promise<Account> {

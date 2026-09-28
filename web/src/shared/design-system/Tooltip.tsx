@@ -10,7 +10,7 @@ export function Tooltip({
 }: {
   label: string
   children: ReactNode
-  side?: 'top' | 'bottom'
+  side?: 'top' | 'bottom' | 'right'
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -22,9 +22,16 @@ export function Tooltip({
     if (!rect) return
 
     const gap = 8
-    const top = side === 'top' ? rect.top - gap : rect.bottom + gap
 
-    setPosition({ top, left: rect.left + rect.width / 2 })
+    if (side === 'right') {
+      setPosition({ top: rect.top + rect.height / 2, left: rect.right + gap })
+    } else {
+      setPosition({
+        top: side === 'top' ? rect.top - gap : rect.bottom + gap,
+        left: rect.left + rect.width / 2,
+      })
+    }
+
     setOpen(true)
   }
 
@@ -49,7 +56,12 @@ export function Tooltip({
             style={{
               top: position.top,
               left: position.left,
-              transform: side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+              transform:
+                side === 'top'
+                  ? 'translate(-50%, -100%)'
+                  : side === 'bottom'
+                    ? 'translate(-50%, 0)'
+                    : 'translate(0, -50%)',
             }}
             className="pointer-events-none fixed z-[100] max-w-64 rounded-md bg-foreground px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-background shadow-pop"
           >

@@ -124,4 +124,5 @@ export interface AccountListParams extends ListParams {
   due_to?: string
   paid_from?: string
   paid_to?: string
+  with_settlements?: boolean | string
 }

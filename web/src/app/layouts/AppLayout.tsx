@@ -69,75 +69,112 @@ function Brand() {
   )
 }
 
-function SidebarNavigation({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarHeader({
+  collapsed,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean
+  onToggleCollapsed?: () => void
+}) {
+  return (
+    <div className={cn('flex items-center', collapsed ? 'justify-center' : 'justify-between gap-2')}>
+      {!collapsed && <Brand />}
+      {onToggleCollapsed && (
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          aria-label={collapsed ? 'Expandir menu' : 'Ocultar menu'}
+          aria-pressed={collapsed}
+          title={collapsed ? 'Expandir menu' : 'Ocultar menu'}
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <Menu className="size-5" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+function SidebarNavigation({
+  collapsed = false,
+  onToggleCollapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
+  onNavigate?: () => void
+}) {
   const { can } = usePermissions()
 
   return (
-    <Sidebar header={<Brand />}>
-      <SidebarGroup label="Geral">
-        <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" onNavigate={onNavigate} />
+    <Sidebar
+      collapsed={collapsed}
+      header={<SidebarHeader collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />}
+    >
+      <SidebarGroup label="Geral" collapsed={collapsed}>
+        <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" collapsed={collapsed} onNavigate={onNavigate} />
         {can(Permission.ASSISTANT_VIEW) && (
-          <SidebarItem to="/assistant" icon={Sparkles} label="Assistente de IA" onNavigate={onNavigate} />
+          <SidebarItem to="/assistant" icon={Sparkles} label="Assistente de IA" collapsed={collapsed} onNavigate={onNavigate} />
         )}
       </SidebarGroup>
 
-      <SidebarGroup label="Financeiro">
+      <SidebarGroup label="Financeiro" collapsed={collapsed}>
         {can(Permission.CASH_FLOW_VIEW) && (
-          <SidebarItem to="/cash-flow/realized" icon={TrendingUp} label="Fluxo realizado" onNavigate={onNavigate} />
+          <SidebarItem to="/cash-flow/realized" icon={TrendingUp} label="Fluxo realizado" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.CASH_FLOW_VIEW) && (
-          <SidebarItem to="/cash-flow/projected" icon={BarChart3} label="Fluxo projetado" onNavigate={onNavigate} />
+          <SidebarItem to="/cash-flow/projected" icon={BarChart3} label="Fluxo projetado" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.ACCOUNTS_VIEW) && (
-          <SidebarItem to="/accounts" icon={Wallet} label="Contas a pagar/receber" onNavigate={onNavigate} />
+          <SidebarItem to="/accounts" icon={Wallet} label="Contas a pagar/receber" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.ACCOUNTS_VIEW) && (
-          <SidebarItem to="/installments" icon={CalendarRange} label="Parcelamentos" onNavigate={onNavigate} />
+          <SidebarItem to="/installments" icon={CalendarRange} label="Parcelamentos" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.RECURRENCES_VIEW) && (
-          <SidebarItem to="/recurrences" icon={Repeat} label="Recorrências" onNavigate={onNavigate} />
+          <SidebarItem to="/recurrences" icon={Repeat} label="Recorrências" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.TRANSFERS_VIEW) && (
-          <SidebarItem to="/transfers" icon={ArrowRightLeft} label="Transferências" onNavigate={onNavigate} />
+          <SidebarItem to="/transfers" icon={ArrowRightLeft} label="Transferências" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.RECONCILIATION_VIEW) && (
-          <SidebarItem to="/reconciliation" icon={BookOpenCheck} label="Conciliação" onNavigate={onNavigate} />
+          <SidebarItem to="/reconciliation" icon={BookOpenCheck} label="Conciliação" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.REPORTS_VIEW) && (
-          <SidebarItem to="/reports" icon={BarChart3} label="Relatórios" onNavigate={onNavigate} />
+          <SidebarItem to="/reports" icon={BarChart3} label="Relatórios" collapsed={collapsed} onNavigate={onNavigate} />
         )}
       </SidebarGroup>
 
-      <SidebarGroup label="Cadastros">
+      <SidebarGroup label="Cadastros" collapsed={collapsed}>
         {can(Permission.BANK_ACCOUNTS_VIEW) && (
-          <SidebarItem to="/bank-accounts" icon={Landmark} label="Contas bancárias" onNavigate={onNavigate} />
+          <SidebarItem to="/bank-accounts" icon={Landmark} label="Contas bancárias" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.COST_CENTERS_VIEW) && (
-          <SidebarItem to="/cost-centers" icon={Layers} label="Centros de custo" onNavigate={onNavigate} />
+          <SidebarItem to="/cost-centers" icon={Layers} label="Centros de custo" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.COMPANIES_VIEW) && (
-          <SidebarItem to="/companies" icon={Building2} label="Empresas" onNavigate={onNavigate} />
+          <SidebarItem to="/companies" icon={Building2} label="Empresas" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.CREDIT_CARDS_VIEW) && (
-          <SidebarItem to="/credit-cards" icon={CreditCard} label="Cartões de crédito" onNavigate={onNavigate} />
+          <SidebarItem to="/credit-cards" icon={CreditCard} label="Cartões de crédito" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.CATEGORIES_VIEW) && (
-          <SidebarItem to="/categories" icon={Tags} label="Categorias" onNavigate={onNavigate} />
+          <SidebarItem to="/categories" icon={Tags} label="Categorias" collapsed={collapsed} onNavigate={onNavigate} />
         )}
       </SidebarGroup>
 
-      <SidebarGroup label="Gestão">
+      <SidebarGroup label="Gestão" collapsed={collapsed}>
         {can(Permission.USER_READ) && (
-          <SidebarItem to="/users" icon={Users} label="Usuários" onNavigate={onNavigate} />
+          <SidebarItem to="/users" icon={Users} label="Usuários" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.ROLE_READ) && (
-          <SidebarItem to="/roles" icon={ShieldCheck} label="Perfis de acesso" onNavigate={onNavigate} />
+          <SidebarItem to="/roles" icon={ShieldCheck} label="Perfis de acesso" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.AUDIT_VIEW) && (
-          <SidebarItem to="/audit" icon={ScrollText} label="Auditoria" onNavigate={onNavigate} />
+          <SidebarItem to="/audit" icon={ScrollText} label="Auditoria" collapsed={collapsed} onNavigate={onNavigate} />
         )}
         {can(Permission.ASSISTANT_CONFIGURE) && (
-          <SidebarItem to="/settings/ai" icon={Bot} label="Inteligência Artificial" onNavigate={onNavigate} />
+          <SidebarItem to="/settings/ai" icon={Bot} label="Inteligência Artificial" collapsed={collapsed} onNavigate={onNavigate} />
         )}
       </SidebarGroup>
 
@@ -182,11 +219,13 @@ export function AppLayout() {
   const sidebarOpen = useUiStore((state) => state.sidebarOpen)
   const closeSidebar = useUiStore((state) => state.closeSidebar)
   const openSidebar = useUiStore((state) => state.openSidebar)
+  const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
+  const toggleSidebarCollapsed = useUiStore((state) => state.toggleSidebarCollapsed)
 
   return (
     <div className="app-viewport-height flex overflow-hidden">
       <div className="z-20 hidden h-full shrink-0 overflow-hidden shadow-card lg:block">
-        <SidebarNavigation />
+        <SidebarNavigation collapsed={sidebarCollapsed} onToggleCollapsed={toggleSidebarCollapsed} />
       </div>
 
       {sidebarOpen && (

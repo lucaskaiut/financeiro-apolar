@@ -92,6 +92,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::get('accounts', [AccountController::class, 'index'])->middleware('permission:accounts.view');
     Route::post('accounts', [AccountController::class, 'store'])->middleware('permission:accounts.create');
     Route::post('accounts/import', [AccountController::class, 'import'])->middleware('permission:accounts.create');
+    Route::get('accounts/export', [AccountController::class, 'export'])->middleware('permission:accounts.view');
     Route::get('accounts/{account}', [AccountController::class, 'show'])->middleware('permission:accounts.view');
     Route::match(['put', 'patch'], 'accounts/{account}', [AccountController::class, 'update'])->middleware('permission:accounts.update');
     Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->middleware('permission:accounts.delete');

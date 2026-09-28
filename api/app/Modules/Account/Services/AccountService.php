@@ -16,6 +16,7 @@ use App\Modules\Shared\Support\DateOnly;
 use App\Modules\User\Models\User;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -28,9 +29,23 @@ class AccountService
     ) {}
 
     /**
-     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, cost_center_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string}  $filters
+     * @param  array{per_page?: int, search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, cost_center_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string, with_settlements?: bool|string|null}  $filters
      */
     public function paginate(int $perPage = 15, array $filters = []): LengthAwarePaginator
+    {
+        return $this->filteredQuery($filters)
+            ->orderBy('due_date')
+            ->orderBy('id')
+            ->paginate(min(max($perPage, 1), 200));
+    }
+
+    /**
+     * Aplica os mesmos filtros da listagem, sem paginação (usado nas exportações).
+     *
+     * @param  array{search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, cost_center_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string, with_settlements?: bool|string|null}  $filters
+     * @return Builder<FinancialAccount>
+     */
+    public function filteredQuery(array $filters = []): Builder
     {
         $query = FinancialAccount::query()
             ->with([
@@ -45,6 +60,11 @@ class AccountService
                 'allocations.subcategory:id,uuid,name',
             ])
             ->withSum('settlements', 'value');
+
+        // A visualização detalhada exibe o histórico de baixas de cada conta.
+        if (filter_var($filters['with_settlements'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->with(['settlements' => fn ($q) => $q->orderBy('settled_at')]);
+        }
 
         $overdue = filter_var($filters['overdue'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
@@ -100,10 +120,7 @@ class AccountService
             });
         }
 
-        return $query
-            ->orderBy('due_date')
-            ->orderBy('id')
-            ->paginate(min(max($perPage, 1), 100));
+        return $query;
     }
 
     public function find(string $uuid): FinancialAccount

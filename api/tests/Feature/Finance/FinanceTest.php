@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
@@ -256,6 +257,102 @@ class FinanceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('data.0.id', $accountB);
+    }
+
+    public function test_accounts_list_can_include_settlements(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $accountId = $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Conta com baixa',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 300,
+            'due_date' => '2026-04-01',
+            'purchase_date' => '2026-04-01',
+        ])->json('data.0.id');
+
+        $this->postJson("/api/accounts/{$accountId}/settle", ['value' => 100, 'settled_at' => '2026-04-05'])->assertOk();
+
+        $this->getJson('/api/accounts')
+            ->assertOk()
+            ->assertJsonMissingPath('data.0.settlements');
+
+        $this->getJson('/api/accounts?with_settlements=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.0.settlements')
+            ->assertJsonPath('data.0.settlements.0.value', 100)
+            ->assertJsonPath('data.0.settlements.0.settled_at', '2026-04-05');
+    }
+
+    public function test_accounts_list_caps_per_page_at_200(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $this->getJson('/api/accounts?per_page=200')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 200);
+
+        $this->getJson('/api/accounts?per_page=500')
+            ->assertOk()
+            ->assertJsonPath('meta.per_page', 200);
+    }
+
+    public function test_accounts_export_respects_filters(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Energia elétrica',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 150,
+            'due_date' => '2026-05-10',
+            'purchase_date' => '2026-05-01',
+        ])->assertCreated();
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Internet banda larga',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 90,
+            'due_date' => '2026-05-12',
+            'purchase_date' => '2026-05-01',
+        ])->assertCreated();
+
+        $response = $this->get('/api/accounts/export?search=Energia');
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        $path = tempnam(sys_get_temp_dir(), 'accounts-export');
+        file_put_contents($path, $response->streamedContent());
+
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        $values = [];
+
+        foreach ($sheet->getRowIterator() as $row) {
+            foreach ($row->getCellIterator() as $cell) {
+                $values[] = (string) $cell->getValue();
+            }
+        }
+
+        unlink($path);
+
+        $this->assertContains('Energia elétrica', $values);
+        $this->assertNotContains('Internet banda larga', $values);
     }
 
     public function test_accounts_can_be_filtered_by_cost_center(): void

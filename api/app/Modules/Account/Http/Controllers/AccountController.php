@@ -15,6 +15,7 @@ use App\Modules\Account\Models\AccountDocument;
 use App\Modules\Account\Models\AccountImport;
 use App\Modules\Account\Models\FinancialAccount;
 use App\Modules\Account\Models\Settlement;
+use App\Modules\Account\Services\AccountExportService;
 use App\Modules\Account\Services\AccountService;
 use App\Modules\Audit\Enums\AuditAction;
 use App\Modules\Audit\Services\AuditLogService;
@@ -31,6 +32,7 @@ class AccountController extends ApiController
 {
     public function __construct(
         private readonly AccountService $service,
+        private readonly AccountExportService $exportService,
         private readonly AuditLogService $audit,
     ) {}
 
@@ -54,10 +56,32 @@ class AccountController extends ApiController
                 'paid_from',
                 'paid_to',
                 'installment_group_id',
+                'with_settlements',
             ]),
         );
 
         return $this->paginated(AccountResource::collection($accounts));
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        $this->authorize('viewAny', FinancialAccount::class);
+
+        return $this->exportService->exportXlsx($request->only([
+            'search',
+            'type',
+            'status',
+            'overdue',
+            'bank_account_id',
+            'credit_card_id',
+            'cost_center_id',
+            'category_id',
+            'due_from',
+            'due_to',
+            'paid_from',
+            'paid_to',
+            'installment_group_id',
+        ]));
     }
 
     public function show(FinancialAccount $account): JsonResponse
