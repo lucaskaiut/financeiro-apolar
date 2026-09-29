@@ -605,12 +605,6 @@ export default function AccountsListPage() {
       render: (a) => <span className="text-muted">{formatDate(a.purchase_date ?? null)}</span>,
     },
     {
-      key: 'expected_date',
-      header: 'Previsto',
-      className: 'whitespace-nowrap',
-      render: (a) => <span className="text-muted">{formatDate(a.expected_date)}</span>,
-    },
-    {
       key: 'due_date',
       header: 'Vencimento',
       className: 'whitespace-nowrap',
@@ -622,22 +616,6 @@ export default function AccountsListPage() {
             {overdue && <TriangleAlert className="size-3.5 shrink-0" />}
             {formatDate(a.due_date)}
           </span>
-        )
-      },
-    },
-    {
-      key: 'paid_date',
-      header: 'Baixa',
-      className: 'whitespace-nowrap',
-      render: (a) => {
-        const settlements = a.settlements ?? []
-        const lastSettlement = settlements[settlements.length - 1]
-
-        return (
-          <div className="text-muted">
-            <p className="tabular-nums">{formatDate(a.paid_date)}</p>
-            {lastSettlement?.method && <p className="text-[12px]">{lastSettlement.method}</p>}
-          </div>
         )
       },
     },

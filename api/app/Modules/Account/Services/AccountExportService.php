@@ -53,10 +53,7 @@ class AccountExportService
      */
     public function exportXlsx(array $filters): StreamedResponse
     {
-        $accounts = $this->accounts->filteredQuery($filters)
-            ->orderBy('due_date')
-            ->orderBy('id')
-            ->get();
+        $accounts = $this->accounts->filteredQuery($filters)->get();
 
         return $this->streamXlsx('contas-a-pagar-receber.xlsx', 'Contas', function (Worksheet $sheet) use ($accounts, $filters): void {
             $row = $this->applyTitleBlock($sheet, 'Contas a pagar e receber', $this->filterLines($filters));

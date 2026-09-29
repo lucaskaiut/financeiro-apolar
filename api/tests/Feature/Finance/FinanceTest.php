@@ -355,6 +355,37 @@ class FinanceTest extends TestCase
         $this->assertNotContains('Internet banda larga', $values);
     }
 
+    public function test_accounts_are_ordered_by_due_date_then_value(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $create = function (string $description, string $dueDate, float $value) use ($bankAccountId, $categoryId): string {
+            return $this->postJson('/api/accounts', [
+                'type' => 'payable',
+                'description' => $description,
+                'bank_account_id' => $bankAccountId,
+                'category_id' => $categoryId,
+                'value' => $value,
+                'due_date' => $dueDate,
+                'purchase_date' => '2026-06-01',
+            ])->json('data.0.id');
+        };
+
+        $later = $create('Vence depois', '2026-06-20', 10);
+        $higher = $create('Mesmo dia, maior valor', '2026-06-10', 500);
+        $lower = $create('Mesmo dia, menor valor', '2026-06-10', 100);
+
+        $this->getJson('/api/accounts')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $lower)
+            ->assertJsonPath('data.1.id', $higher)
+            ->assertJsonPath('data.2.id', $later);
+    }
+
     public function test_accounts_can_be_filtered_by_cost_center(): void
     {
         $tenant = $this->createTenantWithRoles();

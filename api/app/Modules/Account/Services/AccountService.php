@@ -33,14 +33,12 @@ class AccountService
      */
     public function paginate(int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
-        return $this->filteredQuery($filters)
-            ->orderBy('due_date')
-            ->orderBy('id')
-            ->paginate(min(max($perPage, 1), 200));
+        return $this->filteredQuery($filters)->paginate(min(max($perPage, 1), 200));
     }
 
     /**
-     * Aplica os mesmos filtros da listagem, sem paginação (usado nas exportações).
+     * Aplica os mesmos filtros da listagem com ordenação padrão (data e valor),
+     * sem paginação (usado nas exportações).
      *
      * @param  array{search?: ?string, type?: ?string, status?: ?string, overdue?: bool|string|null, bank_account_id?: ?string, credit_card_id?: ?string, cost_center_id?: ?string, company_id?: ?string, category_id?: ?string, due_from?: ?string, due_to?: ?string, paid_from?: ?string, paid_to?: ?string, installment_group_id?: ?string, with_settlements?: bool|string|null}  $filters
      * @return Builder<FinancialAccount>
@@ -120,7 +118,10 @@ class AccountService
             });
         }
 
-        return $query;
+        return $query
+            ->orderBy('due_date')
+            ->orderBy('value')
+            ->orderBy('id');
     }
 
     public function find(string $uuid): FinancialAccount
