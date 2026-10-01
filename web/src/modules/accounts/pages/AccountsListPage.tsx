@@ -7,10 +7,12 @@ import {
   CreditCard,
   Download,
   FileUp,
+  Hash,
   Landmark,
   LayoutList,
   Plus,
   Printer,
+  Repeat2,
   Rows3,
   SlidersHorizontal,
   TriangleAlert,
@@ -83,6 +85,30 @@ const STATUS_OPTIONS = [
   { value: 'settled', label: 'Liquidado' },
   { value: 'cancelled', label: 'Cancelado' },
 ]
+
+function AccountKindBadges({ account }: { account: Account }) {
+  const isInstallment = account.installment_number !== null
+  const isRecurrence = account.recurrence_id !== null
+
+  if (!isInstallment && !isRecurrence) return null
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      {isInstallment && (
+        <Badge variant="neutral">
+          <Hash className="size-3" />
+          Parcelamento
+        </Badge>
+      )}
+      {isRecurrence && (
+        <Badge variant="primary">
+          <Repeat2 className="size-3" />
+          Recorrência
+        </Badge>
+      )}
+    </div>
+  )
+}
 
 function accountCategoryLabel(account: Account): string {
   if (account.allocation_mode === 'split' && account.allocations?.length) {
@@ -396,6 +422,7 @@ export default function AccountsListPage() {
               )}
               {a.allocation_mode === 'split' && <Badge variant="primary">Rateio</Badge>}
             </div>
+            <AccountKindBadges account={a} />
             <p className="truncate text-[13px] text-muted">{meta.length > 0 ? meta.join(' · ') : '—'}</p>
           </div>
         )
@@ -492,6 +519,7 @@ export default function AccountsListPage() {
               )}
               {a.allocation_mode === 'split' && <Badge variant="primary">Rateio</Badge>}
             </div>
+            <AccountKindBadges account={a} />
             {hasDetails && (
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12px] text-muted">
                 {a.is_card_purchase && (
