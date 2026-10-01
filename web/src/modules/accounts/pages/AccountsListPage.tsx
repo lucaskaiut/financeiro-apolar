@@ -210,7 +210,7 @@ export default function AccountsListPage() {
     ...filters,
     page,
     per_page: perPage,
-    with_settlements: detailed || undefined,
+    with_settlements: true,
   })
 
   const updateParams = (next: {
