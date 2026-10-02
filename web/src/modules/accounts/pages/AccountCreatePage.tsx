@@ -1,8 +1,9 @@
-import { useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { Card, EmptyState, Page, PageContent, PageHeader, Skeleton } from '@/shared/design-system'
 import { Banknote } from 'lucide-react'
 import { toast } from '@/shared/stores/toast.store'
 import { isApiError } from '@/shared/api/errors'
+import { getReturnTo } from '@/shared/utils/navigation'
 import { AccountForm } from '../forms/AccountForm'
 import { useAccountQuery, useCreateAccount } from '../hooks/useAccounts'
 import { accountsService } from '../services/accounts.service'
@@ -10,6 +11,8 @@ import { accountToCloneFormValues } from '../utils/clone'
 
 export default function AccountCreatePage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = getReturnTo(location.state, '/accounts')
   const [searchParams] = useSearchParams()
   const cloneId = searchParams.get('clone')
   const creditCardId = searchParams.get('credit_card_id') ?? ''
@@ -37,7 +40,7 @@ export default function AccountCreatePage() {
         }
         breadcrumb={[
           { label: 'Dashboard', to: '/dashboard' },
-          { label: 'Contas', to: '/accounts' },
+          { label: 'Contas', to: returnTo },
           { label: isCloning ? 'Clonar' : 'Novo' },
         ]}
       />
@@ -60,6 +63,7 @@ export default function AccountCreatePage() {
             mode="create"
             defaultValues={defaultValues}
             submitting={create.isPending}
+            cancelTo={returnTo}
             onSubmit={async (payload, documents) => {
               const result = await create.mutateAsync(payload)
               const accountId = result.data[0]?.id
@@ -76,7 +80,7 @@ export default function AccountCreatePage() {
                 }
               }
 
-              navigate('/accounts')
+              navigate(returnTo, { replace: true })
             }}
           />
         )}

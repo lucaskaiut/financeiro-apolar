@@ -42,6 +42,8 @@ import { useDebounce } from '@/shared/hooks/useDebounce'
 import { useBankAccountOptions } from '@/modules/bank-accounts/hooks/useBankAccounts'
 import { useCostCenterOptions } from '@/modules/cost-centers/hooks/useCostCenters'
 import { useCreditCardOptions } from '@/modules/credit-cards/hooks/useCreditCards'
+import { CategoryFilterSelect } from '@/modules/categories/components/CategorySearchSelect'
+import { resolveCategoryLabel } from '@/modules/categories/utils/category-select'
 import { cn } from '@/shared/utils/cn'
 import { formatCurrency, formatDate, toLocalIsoDate } from '@/shared/utils/format'
 import { openReportWindow, writeHtmlReport } from '@/shared/utils/report-export'
@@ -87,8 +89,10 @@ const STATUS_OPTIONS = [
 ]
 
 function AccountKindBadges({ account }: { account: Account }) {
-  const isInstallment = account.installment_number !== null
-  const isRecurrence = account.recurrence_id !== null
+  const isInstallment =
+    account.is_installment ??
+    (account.installment_group_id !== null || account.installment_number !== null)
+  const isRecurrence = account.is_recurrence ?? Boolean(account.recurrence_id)
 
   if (!isInstallment && !isRecurrence) return null
 
@@ -154,7 +158,9 @@ export default function AccountsListPage() {
   const bankAccountId = searchParams.get('bank_account_id') ?? ''
   const creditCardId = searchParams.get('credit_card_id') ?? ''
   const costCenterId = searchParams.get('cost_center_id') ?? ''
+  const categoryId = searchParams.get('category_id') ?? ''
   const detailed = searchParams.get('view') === 'detailed'
+  const categoryType = type === 'payable' ? 'expense' : type === 'receivable' ? 'income' : undefined
   const today = toLocalIsoDate()
 
   useEffect(() => {
@@ -184,6 +190,7 @@ export default function AccountsListPage() {
     bankAccountId,
     creditCardId,
     costCenterId,
+    categoryId,
     dueFrom || dueTo,
     paidFrom || paidTo,
   ].filter(Boolean).length
@@ -200,6 +207,7 @@ export default function AccountsListPage() {
     bank_account_id: bankAccountId || undefined,
     credit_card_id: creditCardId || undefined,
     cost_center_id: costCenterId || undefined,
+    category_id: categoryId || undefined,
     due_from: dueFrom || undefined,
     due_to: dueTo || undefined,
     paid_from: paidFrom || undefined,
@@ -222,6 +230,7 @@ export default function AccountsListPage() {
     bank_account_id?: string
     credit_card_id?: string
     cost_center_id?: string
+    category_id?: string
     due_from?: string
     due_to?: string
     paid_from?: string
@@ -229,7 +238,12 @@ export default function AccountsListPage() {
   }) => {
     setSearchParams((params) => {
       if (next.type !== undefined) {
-        next.type ? params.set('type', next.type) : params.delete('type')
+        if (next.type) {
+          params.set('type', next.type)
+          params.delete('category_id')
+        } else {
+          params.delete('type')
+        }
         params.delete('page')
       }
       if (next.status !== undefined) {
@@ -256,6 +270,10 @@ export default function AccountsListPage() {
       }
       if (next.cost_center_id !== undefined) {
         next.cost_center_id ? params.set('cost_center_id', next.cost_center_id) : params.delete('cost_center_id')
+        params.delete('page')
+      }
+      if (next.category_id !== undefined) {
+        next.category_id ? params.set('category_id', next.category_id) : params.delete('category_id')
         params.delete('page')
       }
       if (next.due_from !== undefined) {
@@ -308,7 +326,7 @@ export default function AccountsListPage() {
     }, { replace: true })
   }
 
-  const exportMetaLines = (): string[] => {
+  const exportMetaLines = async (): Promise<string[]> => {
     const lines: string[] = []
 
     if (debouncedSearch) lines.push(`Busca: ${debouncedSearch}`)
@@ -328,6 +346,11 @@ export default function AccountsListPage() {
 
     const costCenter = costCenters.data?.find((option) => option.value === costCenterId)
     if (costCenter) lines.push(`Centro de custo: ${costCenter.label}`)
+
+    if (categoryId) {
+      const category = await resolveCategoryLabel(categoryId)
+      if (category) lines.push(`Categoria: ${category.label}`)
+    }
 
     const dueRange = rangeLine('Vencimento', dueFrom, dueTo)
     if (dueRange) lines.push(dueRange)
@@ -369,7 +392,7 @@ export default function AccountsListPage() {
 
     try {
       const accounts = await accountsService.listAll(filters)
-      writeHtmlReport(win, 'Contas a pagar e receber', buildAccountsReportHtml(accounts, exportMetaLines()))
+      writeHtmlReport(win, 'Contas a pagar e receber', buildAccountsReportHtml(accounts, await exportMetaLines()))
     } catch (error) {
       win.close()
       toast.error(
@@ -806,7 +829,17 @@ export default function AccountsListPage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="block min-w-0">
+                  <span className="mb-1.5 block text-[13px] font-medium text-foreground">Categoria</span>
+                  <CategoryFilterSelect
+                    value={categoryId}
+                    type={categoryType}
+                    onChange={(value) => updateParams({ category_id: value })}
+                    className="w-full min-w-0"
+                  />
+                </label>
+
                 <label className="block min-w-0">
                   <span className="mb-1.5 block text-[13px] font-medium text-foreground">Conta bancária</span>
                   <Select

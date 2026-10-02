@@ -14,6 +14,7 @@ interface AccountFormProps {
   hasSettlement?: boolean
   isCardPurchase?: boolean
   purchaseDate?: string | null
+  cancelTo?: string
   onSubmit: (payload: AccountPayload, documents: File[]) => Promise<unknown>
 }
 
@@ -24,6 +25,7 @@ export function AccountForm({
   hasSettlement = false,
   isCardPurchase = false,
   purchaseDate = null,
+  cancelTo = '/accounts',
   onSubmit,
 }: AccountFormProps) {
   const form = useAccountForm({ mode, defaultValues, isCardPurchase, purchaseDate })
@@ -55,7 +57,7 @@ export function AccountForm({
 
         <div className="sticky bottom-0 z-10 border-t border-surface-2 bg-background/95 py-4 backdrop-blur">
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <ButtonLink to="/accounts" variant="secondary">
+            <ButtonLink to={cancelTo} replace variant="secondary">
               Cancelar
             </ButtonLink>
             <Button type="submit" loading={submitting}>

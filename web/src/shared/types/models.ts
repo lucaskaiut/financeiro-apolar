@@ -156,7 +156,9 @@ export interface Account {
   installment_group_id: string | null
   installment_number: number | null
   installment_total: number | null
+  is_installment?: boolean
   recurrence_id: string | null
+  is_recurrence?: boolean
   transfer_id: number | null
   is_reconciled: boolean
   allocations?: AccountAllocation[]

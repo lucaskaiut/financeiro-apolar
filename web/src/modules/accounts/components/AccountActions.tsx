@@ -1,6 +1,7 @@
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { CheckCircle2, Copy, Pencil, Trash2, Undo2, XCircle } from 'lucide-react'
 import { Button, Tooltip } from '@/shared/design-system'
+import { returnToState } from '@/shared/utils/navigation'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { cn } from '@/shared/utils/cn'
@@ -21,9 +22,11 @@ export function AccountActions({
   className?: string
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { can } = usePermissions()
   const unsettle = useUnsettleAccount(account.id)
   const settlements = account.settlements ?? []
+  const returnTo = `${location.pathname}${location.search}`
 
   return (
     <div className={cn('flex items-center justify-end gap-1', className)}>
@@ -63,7 +66,7 @@ export function AccountActions({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(`/accounts/create?clone=${account.id}`)}
+            onClick={() => navigate(`/accounts/create?clone=${account.id}`, { state: returnToState(returnTo) })}
             aria-label={`Clonar ${account.description}`}
           >
             <Copy className="size-4" />
@@ -75,7 +78,7 @@ export function AccountActions({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(`/accounts/${account.id}/edit`)}
+            onClick={() => navigate(`/accounts/${account.id}/edit`, { state: returnToState(returnTo) })}
             aria-label={`Editar ${account.description}`}
           >
             <Pencil className="size-4" />

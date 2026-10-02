@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { Banknote, Copy, RotateCcw } from 'lucide-react'
 import { Button, ButtonLink, Card, ConfirmDialog, EmptyState, Page, PageContent, PageHeader, Skeleton } from '@/shared/design-system'
 import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { formatCurrency } from '@/shared/utils/format'
+import { getReturnTo, returnToState } from '@/shared/utils/navigation'
 import { AccountForm } from '../forms/AccountForm'
 import { DocumentsSection } from '../components/DocumentsSection'
 import { useAccountQuery, useReopenAccount, useUpdateAccount } from '../hooks/useAccounts'
@@ -12,6 +13,8 @@ import { useAccountQuery, useReopenAccount, useUpdateAccount } from '../hooks/us
 export default function AccountEditPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = getReturnTo(location.state, '/accounts')
   const [reopenOpen, setReopenOpen] = useState(false)
 
   const query = useAccountQuery(id)
@@ -27,13 +30,16 @@ export default function AccountEditPage() {
         title="Editar lançamento"
         breadcrumb={[
           { label: 'Dashboard', to: '/dashboard' },
-          { label: 'Contas', to: '/accounts' },
+          { label: 'Contas', to: returnTo },
           { label: 'Editar' },
         ]}
         actions={
           query.data ? (
             <Can permission={Permission.ACCOUNTS_CREATE}>
-              <Button variant="secondary" onClick={() => navigate(`/accounts/create?clone=${query.data!.id}`)}>
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/accounts/create?clone=${query.data!.id}`, { state: returnToState(returnTo) })}
+              >
                 <Copy className="size-4" />
                 Clonar
               </Button>
@@ -50,7 +56,7 @@ export default function AccountEditPage() {
 
         {query.isError && (
           <Card>
-            <EmptyState icon={Banknote} title="Lançamento não encontrado" action={<ButtonLink to="/accounts" variant="secondary">Voltar</ButtonLink>} />
+            <EmptyState icon={Banknote} title="Lançamento não encontrado" action={<ButtonLink to={returnTo} variant="secondary">Voltar</ButtonLink>} />
           </Card>
         )}
 
@@ -112,9 +118,10 @@ export default function AccountEditPage() {
               }}
               submitting={update.isPending}
               hasSettlement={hasSettlement}
+              cancelTo={returnTo}
               onSubmit={async (payload) => {
                 await update.mutateAsync(payload)
-                navigate('/accounts')
+                navigate(returnTo, { replace: true })
               }}
             />
 

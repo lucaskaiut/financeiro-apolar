@@ -30,6 +30,7 @@ import { useTenantContextStore } from '@/shared/stores/tenant.store'
 import { useUiStore } from '@/shared/stores/ui.store'
 import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
+import { SCROLL_CONTAINER_ID, useScrollRestoration } from '@/shared/hooks/useScrollRestoration'
 import { useLogout } from '@/modules/auth/hooks/useAuth'
 import {
   Avatar,
@@ -222,6 +223,8 @@ export function AppLayout() {
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const toggleSidebarCollapsed = useUiStore((state) => state.toggleSidebarCollapsed)
 
+  useScrollRestoration()
+
   return (
     <div className="app-viewport-height flex overflow-hidden">
       <div className="z-20 hidden h-full shrink-0 overflow-hidden shadow-card lg:block">
@@ -261,7 +264,7 @@ export function AppLayout() {
           </div>
         </Topbar>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main id={SCROLL_CONTAINER_ID} className="min-h-0 flex-1 overflow-y-auto">
           <Container className="pt-2">
             <Suspense fallback={<Loading />}>
               <Outlet />
