@@ -71,9 +71,9 @@ export default function CreditCardDetailPage() {
     {
       key: 'actions',
       header: '',
-      className: 'w-52 text-right',
+      className: 'whitespace-nowrap text-right',
       render: (invoice) => (
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex flex-nowrap items-center justify-end gap-0.5">
           <Button
             variant="ghost"
             size="sm"
