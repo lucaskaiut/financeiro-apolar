@@ -100,6 +100,10 @@ export const creditCardsService = {
     return response.data.data
   },
 
+  async reopenInvoice(cardId: string, invoiceId: string): Promise<void> {
+    await http.post(`/credit-cards/${cardId}/invoices/${invoiceId}/reopen`)
+  },
+
   async previewInvoice(
     id: string,
     payload: {

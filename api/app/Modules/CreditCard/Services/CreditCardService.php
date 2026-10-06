@@ -265,6 +265,46 @@ class CreditCardService
         });
     }
 
+    /**
+     * Desfaz o fechamento: remove a conta a pagar da fatura e libera as compras para um novo fechamento.
+     */
+    public function reopenInvoice(CreditCard $creditCard, CreditCardInvoice $invoice): void
+    {
+        if ($invoice->credit_card_id !== $creditCard->uuid) {
+            throw new InvalidArgumentException('Fatura não pertence a este cartão.');
+        }
+
+        if ($invoice->status === CreditCardInvoiceStatus::Paid) {
+            throw new InvalidArgumentException(
+                'Não é possível reabrir uma fatura já paga. Reabra a conta da fatura em Contas a pagar primeiro.',
+            );
+        }
+
+        if ($invoice->status !== CreditCardInvoiceStatus::Closed) {
+            throw new InvalidArgumentException('Esta fatura não está fechada.');
+        }
+
+        DB::transaction(function () use ($invoice): void {
+            $payable = FinancialAccount::query()->find($invoice->financial_account_id);
+
+            if ($payable !== null && $payable->settlements()->exists()) {
+                throw new InvalidArgumentException(
+                    'A conta a pagar da fatura possui baixas. Remova-as antes de reabrir a fatura.',
+                );
+            }
+
+            FinancialAccount::query()
+                ->where('credit_card_invoice_id', $invoice->uuid)
+                ->update(['credit_card_invoice_id' => null]);
+
+            if ($payable !== null) {
+                $payable->delete();
+            }
+
+            $invoice->delete();
+        });
+    }
+
     public function markInvoicePaid(CreditCardInvoice $invoice): CreditCardInvoice
     {
         if ($invoice->status === CreditCardInvoiceStatus::Paid) {

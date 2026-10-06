@@ -79,6 +79,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
     Route::delete('credit-cards/{credit_card}', [CreditCardController::class, 'destroy'])->middleware('permission:credit_cards.delete');
     Route::post('credit-cards/{credit_card}/purchases', [CreditCardController::class, 'storePurchase'])->middleware('permission:credit_cards.update');
     Route::post('credit-cards/{credit_card}/invoices/close', [CreditCardController::class, 'closeInvoice'])->middleware('permission:credit_cards.update');
+    Route::post('credit-cards/{credit_card}/invoices/{invoice}/reopen', [CreditCardController::class, 'reopenInvoice'])->middleware('permission:credit_cards.update');
     Route::post('credit-cards/{credit_card}/invoices/import', [CreditCardController::class, 'importInvoice'])->middleware('permission:credit_cards.update');
     Route::post('credit-cards/{credit_card}/invoices/import/preview', [CreditCardController::class, 'importPreview'])->middleware('permission:credit_cards.update');
     Route::get('credit-cards/{credit_card}/invoices', [CreditCardController::class, 'invoices'])->middleware('permission:credit_cards.view');

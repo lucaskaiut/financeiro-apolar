@@ -7,6 +7,7 @@ import {
   ButtonLink,
   Card,
   CardContent,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   Page,
@@ -23,16 +24,19 @@ import {
   useCloseInvoice,
   useCreditCardInvoices,
   useCreditCardQuery,
+  useReopenInvoice,
 } from '../hooks/useCreditCards'
 
 export default function CreditCardDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [referenceMonth, setReferenceMonth] = useState('')
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null)
+  const [invoiceToReopen, setInvoiceToReopen] = useState<CreditCardInvoice | null>(null)
 
   const cardQuery = useCreditCardQuery(id)
   const invoicesQuery = useCreditCardInvoices(id)
   const closeInvoice = useCloseInvoice(id ?? '')
+  const reopenInvoice = useReopenInvoice(id ?? '')
 
   const invoiceColumns: Array<Column<CreditCardInvoice>> = [
     {
@@ -67,9 +71,9 @@ export default function CreditCardDetailPage() {
     {
       key: 'actions',
       header: '',
-      className: 'w-40 text-right',
+      className: 'w-52 text-right',
       render: (invoice) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -81,6 +85,13 @@ export default function CreditCardDetailPage() {
             <ButtonLink to={`/accounts/${invoice.financial_account_id}/edit`} variant="ghost" size="sm">
               Fatura
             </ButtonLink>
+          )}
+          {invoice.status === 'closed' && (
+            <Can permission={Permission.CREDIT_CARDS_UPDATE}>
+              <Button variant="ghost" size="sm" onClick={() => setInvoiceToReopen(invoice)}>
+                Reabrir
+              </Button>
+            </Can>
           )}
         </div>
       ),
@@ -253,6 +264,43 @@ export default function CreditCardDetailPage() {
           </Card>
         )}
       </PageContent>
+
+      <ConfirmDialog
+        open={invoiceToReopen !== null}
+        onClose={() => setInvoiceToReopen(null)}
+        onConfirm={() => {
+          if (!invoiceToReopen) return
+          reopenInvoice.mutate(invoiceToReopen.id, {
+            onSuccess: () => {
+              setInvoiceToReopen(null)
+              if (expandedInvoiceId === invoiceToReopen.id) {
+                setExpandedInvoiceId(null)
+              }
+            },
+          })
+        }}
+        loading={reopenInvoice.isPending}
+        title="Reabrir fatura"
+        confirmLabel="Sim, reabrir fatura"
+        variant="danger"
+        description={
+          invoiceToReopen ? (
+            <div className="space-y-3 text-sm text-muted">
+              <p>
+                Você está prestes a <strong className="text-foreground">desfazer o fechamento</strong> da fatura{' '}
+                <strong className="text-foreground">{invoiceToReopen.reference_month}</strong> (
+                {formatCurrency(invoiceToReopen.total_value)}).
+              </p>
+              <p>Esta ação irá:</p>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>excluir a conta a pagar gerada no fechamento</li>
+                <li>desvincular as compras desta fatura para que possam ser fechadas novamente</li>
+              </ul>
+              <p>As compras permanecem no sistema com centro de custo e categoria inalterados.</p>
+            </div>
+          ) : undefined
+        }
+      />
     </Page>
   )
 }

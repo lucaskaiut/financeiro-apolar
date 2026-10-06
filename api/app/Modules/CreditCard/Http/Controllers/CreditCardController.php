@@ -20,6 +20,7 @@ use App\Modules\Shared\Http\Controllers\ApiController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 class CreditCardController extends ApiController
 {
@@ -113,6 +114,19 @@ class CreditCardController extends ApiController
         $invoice = $this->service->closeInvoice($creditCard, $request->validated('reference_month'));
 
         return $this->success(CreditCardInvoiceResource::make($invoice), 'Fatura fechada com sucesso.');
+    }
+
+    public function reopenInvoice(Request $request, CreditCard $creditCard, CreditCardInvoice $invoice): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        try {
+            $this->service->reopenInvoice($creditCard, $invoice);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['invoice' => [$e->getMessage()]]);
+        }
+
+        return $this->success(null, 'Fatura reaberta com sucesso.');
     }
 
     public function importInvoice(ImportCreditCardInvoiceRequest $request, CreditCard $creditCard): JsonResponse

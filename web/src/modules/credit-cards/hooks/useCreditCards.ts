@@ -90,6 +90,22 @@ export function useCloseInvoice(cardId: string) {
   })
 }
 
+export function useReopenInvoice(cardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (invoiceId: string) => creditCardsService.reopenInvoice(cardId, invoiceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
+      toast.success(
+        'Fatura reaberta',
+        'O fechamento foi desfeito. A conta a pagar foi removida e as compras voltaram a ficar disponíveis para fechamento.',
+      )
+    },
+  })
+}
+
 export function useImportInvoice(cardId: string) {
   const queryClient = useQueryClient()
 

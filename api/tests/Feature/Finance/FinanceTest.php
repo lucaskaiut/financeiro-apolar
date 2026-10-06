@@ -1745,6 +1745,57 @@ OFX;
         $this->assertEqualsWithDelta(1500, $filteredCash['total_out'], 0.01);
     }
 
+    public function test_closed_credit_card_invoice_can_be_reopened(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Reabrir',
+            'institution' => 'Teste',
+            'closing_day' => 25,
+            'due_day' => 5,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Compra reabrir',
+            'category_id' => $categoryId,
+            'cost_center_id' => $obraA,
+            'credit_card_id' => $cardId,
+            'value' => 800,
+            'purchase_date' => '2026-09-01',
+        ])->assertCreated();
+
+        $invoiceId = $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
+            'reference_month' => '2026-09',
+        ])->assertOk()->json('data.id');
+
+        $this->assertSame(1, CreditCardInvoice::query()->count());
+        $this->assertSame(1, FinancialAccount::query()->where('is_card_invoice_payable', true)->count());
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/{$invoiceId}/reopen")
+            ->assertOk()
+            ->assertJsonPath('message', 'Fatura reaberta com sucesso.');
+
+        $this->assertSame(0, CreditCardInvoice::query()->count());
+        $this->assertSame(0, FinancialAccount::query()->where('is_card_invoice_payable', true)->count());
+        $this->assertSame(
+            0,
+            FinancialAccount::query()->where('is_card_purchase', true)->whereNotNull('credit_card_invoice_id')->count(),
+        );
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
+            'reference_month' => '2026-09',
+        ])->assertOk();
+    }
+
     public function test_credit_card_purchase_supports_installments(): void
     {
         $tenant = $this->createTenantWithRoles();
