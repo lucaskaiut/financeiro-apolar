@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { Pencil, Plus, Tags, Trash2 } from 'lucide-react'
+import { ChevronRight, Pencil, Plus, Tags, Trash2 } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -21,9 +21,12 @@ import { Permission } from '@/shared/constants/permissions'
 import { usePermissions } from '@/shared/hooks/usePermissions'
 import { useDebounce } from '@/shared/hooks/useDebounce'
 import type { Category } from '@/shared/types/models'
+import { cn } from '@/shared/utils/cn'
 import { useCategoriesQuery, useDeleteCategory } from '../hooks/useCategories'
+import { buildCategoryListRows, type CategoryListRow } from '../utils/category-list-tree'
 
 const PER_PAGE = 10
+const FETCH_PER_PAGE = 100
 
 export default function CategoriesListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,9 +37,35 @@ export default function CategoriesListPage() {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const [toDelete, setToDelete] = useState<Category | null>(null)
+  const [collapsedParentIds, setCollapsedParentIds] = useState<Set<string>>(() => new Set())
   const deleteCategory = useDeleteCategory()
 
-  const query = useCategoriesQuery({ page, per_page: PER_PAGE, search: debouncedSearch || undefined })
+  const query = useCategoriesQuery({
+    page: 1,
+    per_page: FETCH_PER_PAGE,
+    search: debouncedSearch || undefined,
+  })
+
+  const { rows, pagination } = useMemo(
+    () =>
+      buildCategoryListRows({
+        categories: query.data?.data ?? [],
+        search: debouncedSearch || undefined,
+        collapsedParentIds,
+        page,
+        perPage: PER_PAGE,
+      }),
+    [query.data?.data, debouncedSearch, collapsedParentIds, page],
+  )
+
+  const toggleParentCollapsed = (parentId: string) => {
+    setCollapsedParentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(parentId)) next.delete(parentId)
+      else next.add(parentId)
+      return next
+    })
+  }
 
   const updateParams = (next: { page?: number; search?: string }) => {
     setSearchParams((params) => {
@@ -58,23 +87,45 @@ export default function CategoriesListPage() {
 
   const canMutate = can(Permission.CATEGORIES_UPDATE) || can(Permission.CATEGORIES_DELETE)
 
-  const columns: Array<Column<Category>> = [
+  const columns: Array<Column<CategoryListRow>> = [
     {
       key: 'name',
       header: 'Categoria',
-      render: (c) => (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: c.color ?? '#e2e8f0' }} />
-            <span className="font-medium text-foreground">{c.name}</span>
-            {c.parent_name && <Badge variant="neutral">Subcategoria</Badge>}
+      render: (c) => {
+        const isSub = c.depth === 1
+        const isCollapsed = collapsedParentIds.has(c.id)
+
+        return (
+          <div className={cn('min-w-0', isSub && 'border-l-2 border-surface-3 pl-4')}>
+            <div
+              className={cn('flex items-center gap-2', isSub ? 'gap-2.5' : 'gap-1.5')}
+              style={isSub ? { marginLeft: '0.5rem' } : undefined}
+            >
+              {!isSub && c.hasChildren ? (
+                <button
+                  type="button"
+                  onClick={() => toggleParentCollapsed(c.id)}
+                  aria-expanded={!isCollapsed}
+                  aria-label={isCollapsed ? `Expandir subcategorias de ${c.name}` : `Recolher subcategorias de ${c.name}`}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  <ChevronRight className={cn('size-4 transition-transform duration-200', !isCollapsed && 'rotate-90')} />
+                </button>
+              ) : (
+                <span className="size-7 shrink-0" aria-hidden />
+              )}
+              <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: c.color ?? '#e2e8f0' }} />
+              <span className={cn('text-foreground', isSub ? 'text-[13px]' : 'font-medium')}>{c.name}</span>
+              {!isSub && c.hasChildren && (
+                <Badge variant="neutral" className="tabular-nums">
+                  {c.subcategories_count ?? 0}
+                </Badge>
+              )}
+              {isSub && <Badge variant="neutral">Subcategoria</Badge>}
+            </div>
           </div>
-          {c.parent_name && <p className="pl-[22px] text-[13px] text-muted">Subcategoria de {c.parent_name}</p>}
-          {!c.parent_name && (c.subcategories_count ?? 0) > 0 && (
-            <p className="pl-[22px] text-[13px] text-muted">{c.subcategories_count} subcategoria(s)</p>
-          )}
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'type',
@@ -93,7 +144,7 @@ export default function CategoriesListPage() {
             key: 'actions',
             header: <span className="sr-only">Ações</span>,
             className: 'w-24 text-right',
-            render: (c: Category) => (
+            render: (c: CategoryListRow) => (
               <div className="flex items-center justify-end gap-1">
                 {can(Permission.CATEGORIES_UPDATE) && (
                   <Button variant="ghost" size="sm" onClick={() => navigate(`/categories/${c.id}/edit`)} aria-label={`Editar ${c.name}`}>
@@ -107,7 +158,7 @@ export default function CategoriesListPage() {
                 )}
               </div>
             ),
-          } satisfies Column<Category>,
+          } satisfies Column<CategoryListRow>,
         ]
       : []),
   ]
@@ -144,7 +195,7 @@ export default function CategoriesListPage() {
         <DataTable
           caption="Lista de categorias"
           columns={columns}
-          rows={query.data?.data ?? []}
+          rows={rows}
           rowKey={(c) => c.id}
           loading={query.isPending}
           emptyState={
@@ -152,7 +203,9 @@ export default function CategoriesListPage() {
           }
         />
 
-        {query.data && <Pagination meta={query.data.meta} onPageChange={(next) => updateParams({ page: next })} />}
+        {pagination.total > 0 && (
+          <Pagination meta={pagination} onPageChange={(next) => updateParams({ page: next })} />
+        )}
       </PageContent>
 
       <ConfirmDialog
