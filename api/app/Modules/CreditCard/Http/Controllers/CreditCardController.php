@@ -7,14 +7,18 @@ use App\Modules\Audit\Services\AuditLogService;
 use App\Modules\CreditCard\Http\Requests\CloseCreditCardInvoiceRequest;
 use App\Modules\CreditCard\Http\Requests\ImportCreditCardInvoiceRequest;
 use App\Modules\CreditCard\Http\Requests\PreviewCreditCardInvoiceRequest;
+use App\Modules\CreditCard\Http\Requests\SaveCreditCardInvoiceImportDraftRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardPurchaseRequest;
 use App\Modules\CreditCard\Http\Requests\StoreCreditCardRequest;
 use App\Modules\CreditCard\Http\Requests\UpdateCreditCardRequest;
+use App\Modules\CreditCard\Http\Resources\CreditCardInvoiceImportDraftResource;
+use App\Modules\CreditCard\Http\Resources\CreditCardInvoiceImportDraftSummaryResource;
 use App\Modules\CreditCard\Http\Resources\CreditCardInvoiceResource;
 use App\Modules\CreditCard\Http\Resources\CreditCardResource;
 use App\Modules\CreditCard\Models\CreditCard;
 use App\Modules\CreditCard\Models\CreditCardInvoice;
 use App\Modules\CreditCard\Services\CreditCardService;
+use App\Modules\CreditCard\Services\InvoiceImportDraftService;
 use App\Modules\CreditCard\Services\InvoiceImportService;
 use App\Modules\Shared\Http\Controllers\ApiController;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +31,7 @@ class CreditCardController extends ApiController
     public function __construct(
         private readonly CreditCardService $service,
         private readonly InvoiceImportService $imports,
+        private readonly InvoiceImportDraftService $importDrafts,
         private readonly AuditLogService $audit,
     ) {}
 
@@ -150,6 +155,8 @@ class CreditCardController extends ApiController
             throw ValidationException::withMessages(['items' => [$e->getMessage()]]);
         }
 
+        $this->importDrafts->delete($creditCard, $referenceMonth);
+
         $this->audit->recordEntity(
             $request->user(),
             AuditAction::FinancialCreate,
@@ -165,6 +172,69 @@ class CreditCardController extends ApiController
         );
 
         return $this->success($result, 'Fatura importada e liquidada com sucesso.');
+    }
+
+    public function importDrafts(CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('view', $creditCard);
+
+        $drafts = $this->importDrafts->listForCard($creditCard);
+
+        return $this->success(CreditCardInvoiceImportDraftSummaryResource::collection($drafts));
+    }
+
+    public function showImportDraft(Request $request, CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        $referenceMonth = $request->string('reference_month')->toString();
+
+        if ($referenceMonth === '') {
+            throw ValidationException::withMessages([
+                'reference_month' => ['Informe o mês de referência do rascunho.'],
+            ]);
+        }
+
+        $draft = $this->importDrafts->findForCard($creditCard, $referenceMonth);
+
+        if ($draft === null) {
+            return $this->success(null, 'Nenhum rascunho encontrado.');
+        }
+
+        return $this->success(CreditCardInvoiceImportDraftResource::make($draft));
+    }
+
+    public function saveImportDraft(SaveCreditCardInvoiceImportDraftRequest $request, CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        $referenceMonth = $request->validated('reference_month');
+
+        $this->ensureInvoiceNotExists($creditCard, $referenceMonth);
+
+        $draft = $this->importDrafts->save($creditCard, $request->user(), $request->validated());
+
+        return $this->success(
+            CreditCardInvoiceImportDraftResource::make($draft),
+            'Progresso da importação salvo.',
+        );
+    }
+
+    public function destroyImportDraft(Request $request, CreditCard $creditCard): JsonResponse
+    {
+        $this->authorize('update', $creditCard);
+
+        $referenceMonth = $request->string('reference_month')->toString();
+
+        if ($referenceMonth === '') {
+            throw ValidationException::withMessages([
+                'reference_month' => ['Informe o mês de referência do rascunho.'],
+            ]);
+        }
+
+        $this->importDrafts->delete($creditCard, $referenceMonth);
+
+        return $this->success(null, 'Rascunho da importação removido.');
     }
 
     public function importPreview(PreviewCreditCardInvoiceRequest $request, CreditCard $creditCard): JsonResponse

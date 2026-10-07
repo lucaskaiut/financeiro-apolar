@@ -7,6 +7,7 @@ import {
   type CreditCardPayload,
   type ImportItemPayload,
 } from '../services/credit-cards.service'
+import type { SaveInvoiceImportDraftPayload } from '../utils/import-draft-payload'
 
 export function useCreditCardsQuery(params: ListParams) {
   return useQuery({
@@ -118,6 +119,7 @@ export function useImportInvoice(cardId: string) {
     }) => creditCardsService.importInvoice(cardId, payload),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.invoices(cardId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.importDrafts(cardId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
       toast.success(
         'Fatura importada',
@@ -135,5 +137,39 @@ export function usePreviewInvoice(cardId: string) {
       category_id: string
       cost_center_id?: string | null
     }) => creditCardsService.previewInvoice(cardId, payload),
+  })
+}
+
+export function useInvoiceImportDrafts(cardId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.creditCards.importDrafts(cardId ?? ''),
+    queryFn: () => creditCardsService.listInvoiceImportDrafts(cardId!),
+    enabled: !!cardId,
+  })
+}
+
+export function useSaveInvoiceImportDraft(cardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (payload: SaveInvoiceImportDraftPayload) => creditCardsService.saveInvoiceImportDraft(cardId, payload),
+    onSuccess: (draft) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.importDrafts(cardId) })
+      queryClient.setQueryData(queryKeys.creditCards.importDraft(cardId, draft.reference_month), draft)
+      toast.success('Progresso salvo', 'Você pode continuar a classificação depois.')
+    },
+  })
+}
+
+export function useDeleteInvoiceImportDraft(cardId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (referenceMonth: string) => creditCardsService.deleteInvoiceImportDraft(cardId, referenceMonth),
+    onSuccess: (_, referenceMonth) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.creditCards.importDrafts(cardId) })
+      queryClient.removeQueries({ queryKey: queryKeys.creditCards.importDraft(cardId, referenceMonth) })
+      toast.success('Rascunho removido', 'O progresso salvo foi descartado.')
+    },
   })
 }

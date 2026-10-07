@@ -39,6 +39,9 @@ export const queryKeys = {
     list: (params: ListParams) => ['credit-cards', 'list', params] as const,
     detail: (id: string) => ['credit-cards', 'detail', id] as const,
     invoices: (id: string) => ['credit-cards', 'detail', id, 'invoices'] as const,
+    importDrafts: (id: string) => ['credit-cards', 'detail', id, 'import-drafts'] as const,
+    importDraft: (id: string, referenceMonth: string) =>
+      ['credit-cards', 'detail', id, 'import-draft', referenceMonth] as const,
   },
 
   categories: {

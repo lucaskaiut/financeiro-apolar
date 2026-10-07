@@ -1093,6 +1093,103 @@ OFX;
             ->assertJsonPath('data.0.status', 'paid');
     }
 
+    public function test_credit_card_invoice_import_draft_can_be_saved_and_removed_after_import(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $costCenterId = $this->createCostCenter();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Draft Card',
+            'closing_day' => 10,
+            'due_day' => 15,
+            'bank_account_id' => $bankAccountId,
+        ])->assertCreated()->json('data.id');
+
+        $this->putJson("/api/credit-cards/{$cardId}/invoices/import/draft", [
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'cost_center_id' => $costCenterId,
+            'due_date' => '2026-09-15',
+            'step' => 2,
+            'source_filename' => 'fatura.xlsx',
+            'items' => [
+                [
+                    'id' => 'p-1',
+                    'description' => 'Compra A',
+                    'purchase_date' => '2026-08-28',
+                    'value' => 100.5,
+                    'category_id' => $categoryId,
+                    'subcategory_id' => null,
+                    'cost_center_id' => $costCenterId,
+                    'status' => 'normal',
+                    'is_duplicate' => false,
+                    'existing' => null,
+                    'splits' => [],
+                ],
+                [
+                    'id' => 'p-2',
+                    'description' => 'Compra B',
+                    'purchase_date' => '2026-08-29',
+                    'value' => 200,
+                    'category_id' => null,
+                    'subcategory_id' => null,
+                    'cost_center_id' => null,
+                    'status' => 'normal',
+                    'is_duplicate' => false,
+                    'existing' => null,
+                    'splits' => [],
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.progress.classified', 1)
+            ->assertJsonPath('data.progress.pending', 1);
+
+        $this->getJson("/api/credit-cards/{$cardId}/invoices/import/draft?reference_month=2026-09")
+            ->assertOk()
+            ->assertJsonPath('data.reference_month', '2026-09')
+            ->assertJsonPath('data.items.1.category_id', null);
+
+        $this->getJson("/api/credit-cards/{$cardId}/invoices/import/drafts")
+            ->assertOk()
+            ->assertJsonCount(1, 'data');
+
+        $this->postJson("/api/credit-cards/{$cardId}/invoices/import", [
+            'reference_month' => '2026-09',
+            'paid_date' => '2026-09-15',
+            'bank_account_id' => $bankAccountId,
+            'items' => [
+                [
+                    'description' => 'Compra A',
+                    'purchase_date' => '2026-08-28',
+                    'value' => 100.5,
+                    'status' => 'normal',
+                    'category_id' => $categoryId,
+                    'subcategory_id' => null,
+                    'cost_center_id' => $costCenterId,
+                ],
+                [
+                    'description' => 'Compra B',
+                    'purchase_date' => '2026-08-29',
+                    'value' => 200,
+                    'status' => 'normal',
+                    'category_id' => $categoryId,
+                    'subcategory_id' => null,
+                    'cost_center_id' => $costCenterId,
+                ],
+            ],
+        ])->assertOk();
+
+        $this->getJson("/api/credit-cards/{$cardId}/invoices/import/drafts")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
     public function test_credit_card_invoice_import_with_rateio(): void
     {
         $tenant = $this->createTenantWithRoles();

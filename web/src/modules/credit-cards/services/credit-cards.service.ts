@@ -1,6 +1,11 @@
 import { http } from '@/shared/api/http'
 import type { ApiResponse, ListParams, PaginatedResponse } from '@/shared/types/api'
 import type { CreditCard, CreditCardInvoice } from '@/shared/types/models'
+import type {
+  InvoiceImportDraft,
+  InvoiceImportDraftSummary,
+  SaveInvoiceImportDraftPayload,
+} from '../utils/import-draft-payload'
 
 export interface CreditCardPayload {
   name: string
@@ -139,6 +144,32 @@ export const creditCardsService = {
     const response = await http.post<ApiResponse<ImportInvoiceResult>>(`/credit-cards/${id}/invoices/import`, payload)
 
     return response.data.data
+  },
+
+  async listInvoiceImportDrafts(id: string): Promise<InvoiceImportDraftSummary[]> {
+    const response = await http.get<ApiResponse<InvoiceImportDraftSummary[]>>(`/credit-cards/${id}/invoices/import/drafts`)
+
+    return response.data.data ?? []
+  },
+
+  async getInvoiceImportDraft(id: string, referenceMonth: string): Promise<InvoiceImportDraft | null> {
+    const response = await http.get<ApiResponse<InvoiceImportDraft | null>>(`/credit-cards/${id}/invoices/import/draft`, {
+      params: { reference_month: referenceMonth },
+    })
+
+    return response.data.data
+  },
+
+  async saveInvoiceImportDraft(id: string, payload: SaveInvoiceImportDraftPayload): Promise<InvoiceImportDraft> {
+    const response = await http.put<ApiResponse<InvoiceImportDraft>>(`/credit-cards/${id}/invoices/import/draft`, payload)
+
+    return response.data.data
+  },
+
+  async deleteInvoiceImportDraft(id: string, referenceMonth: string): Promise<void> {
+    await http.delete(`/credit-cards/${id}/invoices/import/draft`, {
+      params: { reference_month: referenceMonth },
+    })
   },
 }
 

@@ -24,6 +24,7 @@ import {
   useCloseInvoice,
   useCreditCardInvoices,
   useCreditCardQuery,
+  useInvoiceImportDrafts,
   useReopenInvoice,
 } from '../hooks/useCreditCards'
 
@@ -35,6 +36,7 @@ export default function CreditCardDetailPage() {
 
   const cardQuery = useCreditCardQuery(id)
   const invoicesQuery = useCreditCardInvoices(id)
+  const importDraftsQuery = useInvoiceImportDrafts(id)
   const closeInvoice = useCloseInvoice(id ?? '')
   const reopenInvoice = useReopenInvoice(id ?? '')
 
@@ -177,6 +179,34 @@ export default function CreditCardDetailPage() {
               title="Cartão não encontrado"
               action={<ButtonLink to="/credit-cards" variant="secondary">Voltar</ButtonLink>}
             />
+          </Card>
+        )}
+
+        {cardQuery.data && (importDraftsQuery.data?.length ?? 0) > 0 && (
+          <Card className="border border-primary/30 bg-primary/5">
+            <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Importação de fatura em andamento</h2>
+                <p className="mt-1 text-[13px] text-muted">
+                  {(importDraftsQuery.data ?? []).length === 1
+                    ? `Referência ${importDraftsQuery.data![0].reference_month}: ${importDraftsQuery.data![0].progress.classified} classificadas.`
+                    : `${importDraftsQuery.data!.length} importações com progresso salvo.`}
+                </p>
+              </div>
+              <Can permission={Permission.CREDIT_CARDS_UPDATE}>
+                <ButtonLink
+                  to={
+                    (importDraftsQuery.data?.length ?? 0) === 1
+                      ? `/credit-cards/${id}/invoices/import?month=${importDraftsQuery.data![0].reference_month}`
+                      : `/credit-cards/${id}/invoices/import`
+                  }
+                  variant="secondary"
+                >
+                  <Upload className="size-4" />
+                  Continuar importação
+                </ButtonLink>
+              </Can>
+            </CardContent>
           </Card>
         )}
 
