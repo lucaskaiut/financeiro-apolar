@@ -238,7 +238,7 @@ export function AccountFormFields({
           title="Parcelamento"
           description={
             usingCreditCard
-              ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma.'
+              ? 'Cada parcela entra em uma fatura mensal. A data da compra permanece a mesma e os vencimentos seguem o ciclo do cartão.'
               : 'Divida o valor em parcelas iguais ou personalize cada parcela.'
           }
         >
@@ -259,14 +259,18 @@ export function AccountFormFields({
               )}
             </div>
           )}
-          {installments && !usingCreditCard && (
+          {installments && (
             <div className="mt-4">
               <SwitchField
                 name="customize_installments"
                 label="Personalizar parcelas"
-                hint="Defina o valor e o vencimento de cada parcela individualmente. A soma deve ser igual ao valor do lançamento."
+                hint={
+                  usingCreditCard
+                    ? 'Defina o valor de cada parcela. O vencimento continua sendo calculado pelo ciclo de faturas do cartão.'
+                    : 'Defina o valor e o vencimento de cada parcela individualmente. A soma deve ser igual ao valor do lançamento.'
+                }
               />
-              {customizeInstallments && <InstallmentItemsFields />}
+              {customizeInstallments && <InstallmentItemsFields isCardPurchase={usingCreditCard} />}
             </div>
           )}
         </FormSection>

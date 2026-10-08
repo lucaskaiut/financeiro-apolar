@@ -414,7 +414,8 @@ Na criação, ative **Parcelar este lançamento**.
 
 **Cartão de crédito:**
 
-- informe só a quantidade
+- informe a quantidade de parcelas
+- ative **Personalizar parcelas** para definir o valor de cada parcela (os vencimentos continuam automáticos, uma fatura por mês)
 - cada parcela entra em uma **fatura mensal** seguinte
 - a **data da compra** permanece a da compra original em todas as parcelas
 
@@ -765,7 +766,7 @@ Não. Ela só move saldo entre contas. No fluxo realizado aparece identificada c
 Realizado: o que já foi pago/recebido (data da baixa). Projetado: o que ainda vai vencer (saldo em aberto).
 
 **Posso parcelar e também usar cartão?**  
-Sim. No cartão, cada parcela cai em uma fatura mensal, com a mesma data de compra.
+Sim. No cartão, cada parcela cai em uma fatura mensal, com a mesma data de compra. Também é possível personalizar o valor de cada parcela; o vencimento segue automaticamente o ciclo das faturas.
 
 **Comprei vários tipos de produto no mesmo boleto. Crio várias contas?**  
 Não. Lance **uma** conta com o valor do boleto e ative **Ratear este lançamento**. Informe categoria, centro de custo e valor de cada fatia. A conciliação usa a conta única; os relatórios separam as fatias.

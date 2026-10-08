@@ -6,8 +6,16 @@ export const SCROLL_CONTAINER_ID = 'app-scroll-container'
 const STORAGE_PREFIX = 'scroll-position:'
 const RESTORE_TIMEOUT_MS = 1000
 
+// Telas de formulário sempre começam no topo: evita restaurar a posição de um
+// preenchimento anterior (ex.: rodapé fixo com o botão de salvar).
+const FORM_ROUTE_PATTERN = /\/(?:create|edit)$/
+
 function getScrollContainer(): HTMLElement | null {
   return document.getElementById(SCROLL_CONTAINER_ID)
+}
+
+function isFormRoute(pathname: string): boolean {
+  return FORM_ROUTE_PATTERN.test(pathname)
 }
 
 function readScrollPosition(key: string): number {
@@ -23,10 +31,13 @@ function writeScrollPosition(key: string, position: number): void {
 export function useScrollRestoration(): void {
   const location = useLocation()
   const key = `${location.pathname}${location.search}`
+  const startsAtTop = isFormRoute(location.pathname)
   const currentKeyRef = useRef(key)
   const restoringRef = useRef(false)
 
   useEffect(() => {
+    if (startsAtTop) return
+
     const container = getScrollContainer()
 
     if (!container) return
@@ -40,7 +51,7 @@ export function useScrollRestoration(): void {
     container.addEventListener('scroll', handleScroll, { passive: true })
 
     return () => container.removeEventListener('scroll', handleScroll)
-  }, [key])
+  }, [key, startsAtTop])
 
   useLayoutEffect(() => {
     currentKeyRef.current = key
@@ -48,6 +59,11 @@ export function useScrollRestoration(): void {
     const container = getScrollContainer()
 
     if (!container) return
+
+    if (startsAtTop) {
+      container.scrollTop = 0
+      return
+    }
 
     const saved = readScrollPosition(key)
 
@@ -77,5 +93,5 @@ export function useScrollRestoration(): void {
       cancelAnimationFrame(frame)
       restoringRef.current = false
     }
-  }, [key])
+  }, [key, startsAtTop])
 }

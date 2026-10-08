@@ -57,18 +57,20 @@ export function buildAccountPayload(
     observation: values.observation || null,
     installments:
       mode === 'create' && values.installments
-        ? hasCreditCard
-          ? { quantity: Number(values.installment_quantity) }
-          : values.customize_installments
-            ? {
-                quantity: Number(values.installment_quantity),
-                interval: values.installment_interval,
-                items: values.installment_items.map((line) => ({
-                  value: Number(line.value),
-                  due_date: line.due_date,
-                })),
-              }
-            : { quantity: Number(values.installment_quantity), interval: values.installment_interval }
+        ? {
+            quantity: Number(values.installment_quantity),
+            ...(hasCreditCard ? {} : { interval: values.installment_interval }),
+            ...(values.customize_installments && values.installment_items.length > 0
+              ? {
+                  items: values.installment_items.map((line) =>
+                    hasCreditCard
+                      ? // No cartão apenas o valor é personalizável; o vencimento segue o ciclo da fatura.
+                        { value: Number(line.value) }
+                      : { value: Number(line.value), due_date: line.due_date },
+                  ),
+                }
+              : {}),
+          }
         : null,
     allocations: values.split
       ? values.allocations

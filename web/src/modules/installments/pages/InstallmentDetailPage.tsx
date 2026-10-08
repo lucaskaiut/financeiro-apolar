@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { CalendarRange, CreditCard, Pencil } from 'lucide-react'
 import {
   Badge,
@@ -17,6 +17,7 @@ import {
 import { Can } from '@/app/guards/PermissionGuard'
 import { Permission } from '@/shared/constants/permissions'
 import { formatCurrency, formatDate } from '@/shared/utils/format'
+import { returnToState } from '@/shared/utils/navigation'
 import type { Account } from '@/shared/types/models'
 import { useInstallmentQuery } from '../hooks/useInstallments'
 
@@ -30,10 +31,12 @@ const STATUS_LABELS: Record<Account['status'], { variant: 'neutral' | 'primary' 
 export default function InstallmentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const query = useInstallmentQuery(id)
 
   const data = query.data
+  const returnTo = `${location.pathname}${location.search}`
 
   const columns: Array<Column<Account>> = [
     {
@@ -79,7 +82,7 @@ export default function InstallmentDetailPage() {
       render: (a: Account) => (
         <div className="flex items-center justify-end gap-1">
           <Can permission={Permission.ACCOUNTS_UPDATE}>
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/${a.id}/edit`)} aria-label={`Editar parcela ${a.installment_number}`}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/accounts/${a.id}/edit`, { state: returnToState(returnTo) })} aria-label={`Editar parcela ${a.installment_number}`}>
               <Pencil className="size-4" />
             </Button>
           </Can>

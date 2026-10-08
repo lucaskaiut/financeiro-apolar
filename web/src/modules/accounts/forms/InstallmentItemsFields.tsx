@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 import { TextField } from '@/shared/design-system'
+import { cn } from '@/shared/utils/cn'
 import { formatCurrency } from '@/shared/utils/format'
 import type { AccountFormValues } from '../schemas/account.schema'
 
@@ -23,7 +24,11 @@ function roundTo(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-export function InstallmentItemsFields() {
+interface InstallmentItemsFieldsProps {
+  isCardPurchase?: boolean
+}
+
+export function InstallmentItemsFields({ isCardPurchase = false }: InstallmentItemsFieldsProps) {
   const form = useFormContext<AccountFormValues>()
   const { replace } = useFieldArray({ control: form.control, name: 'installment_items' })
 
@@ -47,20 +52,27 @@ export function InstallmentItemsFields() {
 
       return {
         value: existing && existing.value !== '' ? existing.value : equal > 0 ? String(equal) : '',
-        due_date: existing?.due_date || computeDueDate(dueDate, interval, index),
+        // No cartão o vencimento de cada parcela é calculado pela fatura.
+        due_date: isCardPurchase ? '' : existing?.due_date || computeDueDate(dueDate, interval, index),
       }
     })
 
     replace(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qty, dueDate, interval])
+  }, [qty, dueDate, interval, isCardPurchase])
 
   const formError = form.formState.errors.installment_items?.message as string | undefined
 
   return (
     <div className="mt-4 space-y-3">
       {items.map((_item, index) => (
-        <div key={index} className="grid gap-3 rounded-lg border border-surface-2 p-3 sm:grid-cols-[auto_1fr_1fr]">
+        <div
+          key={index}
+          className={cn(
+            'grid gap-3 rounded-lg border border-surface-2 p-3',
+            isCardPurchase ? 'sm:grid-cols-[auto_1fr]' : 'sm:grid-cols-[auto_1fr_1fr]',
+          )}
+        >
           <div className="flex items-center text-sm font-medium text-foreground">
             {index + 1}/{qty}
           </div>
@@ -71,13 +83,21 @@ export function InstallmentItemsFields() {
             step="0.01"
             min="0"
           />
-          <TextField
-            name={`installment_items.${index}.due_date`}
-            label="Vencimento"
-            type="date"
-          />
+          {!isCardPurchase && (
+            <TextField
+              name={`installment_items.${index}.due_date`}
+              label="Vencimento"
+              type="date"
+            />
+          )}
         </div>
       ))}
+
+      {isCardPurchase && (
+        <p className="text-[13px] text-muted">
+          Os vencimentos seguem automaticamente o ciclo de faturas do cartão.
+        </p>
+      )}
 
       <div className="flex items-center justify-between text-[13px] text-muted">
         <span>Total das parcelas: {formatCurrency(sum)}</span>

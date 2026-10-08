@@ -176,7 +176,7 @@ class AccountService
 
     /**
      * @param  array<string, mixed>  $data
-     * @param  array{quantity?: int, interval?: string}|null  $installments
+     * @param  array{quantity?: int, interval?: string, items?: list<array{value?: numeric, due_date?: string}>}|null  $installments
      * @param  list<array<string, mixed>>|null  $allocations
      * @return list<FinancialAccount>
      */
@@ -184,7 +184,15 @@ class AccountService
     {
         $card = CreditCard::query()->where('uuid', $data['credit_card_id'])->firstOrFail();
 
-        $quantity = max(1, (int) ($installments['quantity'] ?? 1));
+        $items = $installments['items'] ?? null;
+
+        if (is_array($items) && $items !== []) {
+            // No cartão o vencimento segue o ciclo da fatura; apenas os valores são personalizáveis.
+            $installmentsPayload = ['quantity' => count($items), 'items' => $items];
+        } else {
+            $quantity = max(1, (int) ($installments['quantity'] ?? 1));
+            $installmentsPayload = $quantity > 1 ? ['quantity' => $quantity] : null;
+        }
 
         return $this->creditCards->createPurchase($card, [
             'description' => $data['description'],
@@ -196,7 +204,7 @@ class AccountService
             'value' => $data['value'],
             'purchase_date' => $data['purchase_date'],
             'observation' => $data['observation'] ?? null,
-            'installments' => $quantity > 1 ? ['quantity' => $quantity] : null,
+            'installments' => $installmentsPayload,
             'allocations' => $allocations,
         ]);
     }

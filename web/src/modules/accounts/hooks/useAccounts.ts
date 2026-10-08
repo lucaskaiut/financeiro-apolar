@@ -22,6 +22,7 @@ export function useAccountQuery(id: string | undefined) {
 
 function invalidateAccounts(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all })
+  queryClient.invalidateQueries({ queryKey: queryKeys.installments.all })
   queryClient.invalidateQueries({ queryKey: ['cash-flow'] })
   queryClient.invalidateQueries({ queryKey: ['reports'] })
   queryClient.invalidateQueries({ queryKey: ['reconciliation'] })

@@ -73,7 +73,8 @@ class StoreAccountRequest extends FormRequest
             'installments.interval' => ['nullable', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
             'installments.items' => ['nullable', 'array', 'min:1', 'max:120'],
             'installments.items.*.value' => ['required', 'numeric', 'gt:0'],
-            'installments.items.*.due_date' => ['required', 'date'],
+            // No cartão o vencimento é calculado pelo ciclo da fatura; nos demais lançamentos é obrigatório.
+            'installments.items.*.due_date' => [$hasCreditCard ? 'nullable' : 'required', 'date'],
             ...AccountAllocationValidation::rules($tenantId),
         ];
     }

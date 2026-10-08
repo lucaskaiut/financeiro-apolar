@@ -1953,6 +1953,165 @@ OFX;
         );
     }
 
+    public function test_credit_card_purchase_supports_custom_installment_values(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+        $obraA = $this->createCostCenter('Obra A');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Visa',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Notebook',
+            'category_id' => $categoryId,
+            'cost_center_id' => $obraA,
+            'credit_card_id' => $cardId,
+            'value' => 3000,
+            'purchase_date' => '2026-09-04',
+            'installments' => [
+                'quantity' => 3,
+                'items' => [
+                    ['value' => 500],
+                    ['value' => 1000],
+                    ['value' => 1500],
+                ],
+            ],
+        ])->assertCreated();
+
+        $purchases = FinancialAccount::query()
+            ->where('is_card_purchase', true)
+            ->orderBy('installment_number')
+            ->get();
+
+        $this->assertCount(3, $purchases);
+        $this->assertSame([500.0, 1000.0, 1500.0], $purchases->map(fn ($a) => (float) $a->value)->all());
+        $this->assertSame([1, 2, 3], $purchases->pluck('installment_number')->all());
+        $this->assertTrue($purchases->every(fn (FinancialAccount $account) => $account->installment_total === 3));
+        // Valores personalizados, mas vencimentos seguem o ciclo de faturas do cartão.
+        $this->assertSame(['2026-09-17', '2026-10-17', '2026-11-17'], $purchases->map(fn ($a) => $a->due_date->toDateString())->all());
+
+        $september = $this->postJson("/api/credit-cards/{$cardId}/invoices/close", [
+            'reference_month' => '2026-09',
+        ])->assertOk()->json('data');
+
+        $this->assertEqualsWithDelta(500, $september['total_value'], 0.01);
+        $this->assertSame(1, FinancialAccount::query()->where('is_card_purchase', true)->whereNotNull('credit_card_invoice_id')->count());
+    }
+
+    public function test_credit_card_purchase_rejects_custom_installments_when_sum_differs_from_value(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Visa',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Notebook',
+            'category_id' => $categoryId,
+            'credit_card_id' => $cardId,
+            'value' => 3000,
+            'purchase_date' => '2026-09-04',
+            'installments' => [
+                'quantity' => 2,
+                'items' => [
+                    ['value' => 500],
+                    ['value' => 1000],
+                ],
+            ],
+        ])->assertStatus(422);
+
+        $this->assertSame(0, FinancialAccount::query()->where('is_card_purchase', true)->count());
+    }
+
+    public function test_credit_card_purchase_endpoint_supports_custom_installment_values(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Visa',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+            'description' => 'Cadeira',
+            'category_id' => $categoryId,
+            'value' => 900,
+            'purchase_date' => '2026-09-04',
+            'installments' => [
+                'items' => [
+                    ['value' => 300],
+                    ['value' => 600],
+                ],
+            ],
+        ])->assertCreated()->assertJsonPath('data.count', 2);
+
+        $purchases = FinancialAccount::query()
+            ->where('is_card_purchase', true)
+            ->orderBy('installment_number')
+            ->get();
+
+        $this->assertCount(2, $purchases);
+        $this->assertSame([300.0, 600.0], $purchases->map(fn ($a) => (float) $a->value)->all());
+        $this->assertSame(['2026-09-17', '2026-10-17'], $purchases->map(fn ($a) => $a->due_date->toDateString())->all());
+    }
+
+    public function test_credit_card_purchase_endpoint_creates_single_purchase_without_installments(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $cardId = $this->postJson('/api/credit-cards', [
+            'name' => 'Cartão Visa',
+            'institution' => 'Visa',
+            'closing_day' => 10,
+            'due_day' => 17,
+            'bank_account_id' => $bankAccountId,
+            'status' => 'active',
+        ])->assertCreated()->json('data.id');
+
+        $this->postJson("/api/credit-cards/{$cardId}/purchases", [
+            'description' => 'Café',
+            'category_id' => $categoryId,
+            'value' => 50,
+            'purchase_date' => '2026-09-04',
+        ])->assertCreated()->assertJsonPath('data.count', 1);
+
+        $this->assertSame(1, FinancialAccount::query()->where('is_card_purchase', true)->count());
+    }
+
     public function test_unsettle_of_reconciled_settlement_reverses_bank_link(): void
     {
         $tenant = $this->createTenantWithRoles();

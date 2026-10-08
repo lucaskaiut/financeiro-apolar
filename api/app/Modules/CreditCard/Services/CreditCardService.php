@@ -67,7 +67,19 @@ class CreditCardService
             $allocations = $data['allocations'] ?? null;
             unset($data['installments'], $data['allocations']);
 
-            $quantity = max(1, (int) ($installments['quantity'] ?? 1));
+            $items = $installments['items'] ?? null;
+            $customValues = null;
+
+            if (is_array($items) && $items !== []) {
+                $customValues = array_map(
+                    fn ($item) => round((float) ($item['value'] ?? 0), 2),
+                    array_values($items),
+                );
+                $quantity = count($customValues);
+            } else {
+                $quantity = max(1, (int) ($installments['quantity'] ?? 1));
+            }
+
             $purchaseDate = DateOnly::parse($data['purchase_date']);
             unset($data['purchase_date'], $data['due_date']);
 
@@ -81,7 +93,7 @@ class CreditCardService
                 'status' => AccountStatus::Open,
             ];
 
-            if ($quantity <= 1) {
+            if ($quantity <= 1 && $customValues === null) {
                 [$dueDate] = $this->resolvePurchaseDates($creditCard, $purchaseDate);
 
                 return [$this->persistPurchase([
@@ -97,6 +109,7 @@ class CreditCardService
                 $purchaseDate,
                 $quantity,
                 $allocations,
+                $customValues,
             );
         });
     }
@@ -122,6 +135,7 @@ class CreditCardService
     /**
      * @param  array<string, mixed>  $data
      * @param  list<array<string, mixed>>|null  $allocations
+     * @param  list<float>|null  $customValues
      * @return list<FinancialAccount>
      */
     private function createPurchaseInstallments(
@@ -130,6 +144,7 @@ class CreditCardService
         Carbon $firstPurchaseDate,
         int $quantity,
         ?array $allocations = null,
+        ?array $customValues = null,
     ): array {
         if ($quantity < 1 || $quantity > 120) {
             throw new InvalidArgumentException('A quantidade de parcelas deve estar entre 1 e 120.');
@@ -137,23 +152,36 @@ class CreditCardService
 
         $group = (string) Str::uuid();
         $total = round((float) $data['value'], 2);
-        $installmentValue = round($total / $quantity, 2);
         $description = (string) $data['description'];
         $accounts = [];
-        $accumulated = 0.0;
-        $installmentValues = [];
+
+        if ($customValues !== null) {
+            if (count($customValues) !== $quantity) {
+                throw new InvalidArgumentException('A quantidade de parcelas não corresponde aos valores personalizados.');
+            }
+
+            $installmentValues = array_map(fn ($value) => round((float) $value, 2), $customValues);
+
+            if (abs(round(array_sum($installmentValues), 2) - $total) >= 0.01) {
+                throw new InvalidArgumentException('A soma dos valores das parcelas deve ser igual ao valor da compra.');
+            }
+        } else {
+            $installmentValue = round($total / $quantity, 2);
+            $accumulated = 0.0;
+            $installmentValues = [];
+
+            for ($i = 1; $i <= $quantity; $i++) {
+                $value = $i === $quantity
+                    ? round($total - $accumulated, 2)
+                    : $installmentValue;
+
+                $accumulated = round($accumulated + $value, 2);
+                $installmentValues[] = $value;
+            }
+        }
 
         [, $firstReferenceMonth] = $this->resolvePurchaseDates($creditCard, $firstPurchaseDate);
         $purchaseDate = $firstPurchaseDate->toDateString();
-
-        for ($i = 1; $i <= $quantity; $i++) {
-            $value = $i === $quantity
-                ? round($total - $accumulated, 2)
-                : $installmentValue;
-
-            $accumulated = round($accumulated + $value, 2);
-            $installmentValues[] = $value;
-        }
 
         $distributed = is_array($allocations) && $allocations !== []
             ? $this->allocations->distributeAcross($allocations, $installmentValues)

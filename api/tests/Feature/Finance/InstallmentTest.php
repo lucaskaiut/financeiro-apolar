@@ -210,4 +210,33 @@ class InstallmentTest extends TestCase
             ],
         ])->assertStatus(422);
     }
+
+    public function test_it_requires_due_date_for_custom_installments_on_bank_accounts(): void
+    {
+        $tenant = $this->createTenantWithRoles();
+        Sanctum::actingAs($this->createAdmin($tenant));
+
+        $bankAccountId = $this->createBankAccount();
+        $categoryId = $this->createCategory('expense');
+
+        $this->postJson('/api/accounts', [
+            'type' => 'payable',
+            'description' => 'Serviço parcelado sem vencimento',
+            'bank_account_id' => $bankAccountId,
+            'category_id' => $categoryId,
+            'value' => 1000,
+            'due_date' => '2026-01-10',
+            'installments' => [
+                'quantity' => 2,
+                'items' => [
+                    ['value' => 500],
+                    ['value' => 500],
+                ],
+            ],
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors([
+                'installments.items.0.due_date',
+                'installments.items.1.due_date',
+            ]);
+    }
 }

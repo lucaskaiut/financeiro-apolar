@@ -149,7 +149,8 @@ export const accountSchema = z
           ctx.addIssue({ code: 'custom', path: ['installment_items', index, 'value'], message: 'Informe um valor maior que zero' })
         }
 
-        if (!line.due_date) {
+        // No cartão o vencimento é definido automaticamente pelo ciclo da fatura.
+        if (!hasCreditCard && !line.due_date) {
           ctx.addIssue({ code: 'custom', path: ['installment_items', index, 'due_date'], message: 'Informe o vencimento' })
         }
       })
